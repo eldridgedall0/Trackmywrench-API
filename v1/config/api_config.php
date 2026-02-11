@@ -15,8 +15,12 @@ if (!defined('GM_API')) {
 // ============================================================================
 // Path to existing GarageMinder config.php
 // Adjust this path based on your server layout
+// __DIR__           = /gm/api/v1
+// ../../            = /gm
+// ../../garage      = /gm/garage
+
 // ============================================================================
-define('GM_CONFIG_PATH', __DIR__ . '/../../../config.php');
+define('GM_CONFIG_PATH', __DIR__ . '/../../garage/config.php');
 
 // ============================================================================
 // JWT Configuration
