@@ -1,0 +1,53 @@
+# GarageMinder Mobile API v1
+# URL Rewriting - Routes all requests to index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /api/v1/
+
+    # Block access to sensitive directories
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^core/ - [F,L]
+    RewriteRule ^middleware/ - [F,L]
+    RewriteRule ^endpoints/ - [F,L]
+    RewriteRule ^models/ - [F,L]
+
+    # Allow admin-tester static files
+    RewriteRule ^admin-tester/(.+\.(html|css|js|png|ico))$ admin-tester/$1 [L]
+
+    # Route all API requests to index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Prevent directory listing
+Options -Indexes
+
+# Force HTTPS
+<IfModule mod_rewrite.c>
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Block access to hidden files
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# Block access to .key files
+<FilesMatch "\.key$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>

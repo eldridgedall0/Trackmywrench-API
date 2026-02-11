@@ -1,0 +1,20 @@
+# Admin Tester - allow static files only
+# Authentication is handled client-side via JWT
+
+<IfModule mod_rewrite.c>
+    RewriteEngine Off
+</IfModule>
+
+# Allow only specific file types
+<FilesMatch "\.(html|css|js|png|ico)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+</FilesMatch>
+
+# Block everything else
+<FilesMatch "^(?!.*\.(html|css|js|png|ico)$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>

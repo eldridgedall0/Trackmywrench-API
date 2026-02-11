@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GarageMinder API - Admin Tester</title>
+    <link rel="stylesheet" href="tester.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen">
+    <div class="login-box">
+        <h2>&#128295; GarageMinder API</h2>
+        <p class="subtitle">Admin Tester &amp; Documentation</p>
+        <input type="text" id="login-user" placeholder="Username or email" onkeydown="if(event.key==='Enter')handleLogin()">
+        <input type="password" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')handleLogin()">
+        <button onclick="handleLogin()">Sign In</button>
+        <p id="login-error" class="error"></p>
+    </div>
+</div>
+
+<!-- Main App -->
+<div id="app">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>&#128295; API Tester</h1>
+            <span class="version">v1.0.0</span>
+        </div>
+        <div id="nav-groups"></div>
+        <div class="user-info">
+            <div>Signed in as <span class="name" id="user-display"></span></div>
+            <div style="font-size:11px">Plan: <span id="user-sub"></span></div>
+            <button class="logout-btn" onclick="handleLogout()">Log Out</button>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="url-bar">
+                <span id="method-badge" class="method-badge">GET</span>
+                <input type="text" id="url-input" value="" spellcheck="false">
+            </div>
+            <button id="send-btn" class="send-btn" onclick="sendRequest()">Send</button>
+        </div>
+
+        <!-- Panels -->
+        <div class="panels">
+            <!-- Request Panel -->
+            <div class="request-panel">
+                <div class="panel-header">
+                    <span class="panel-tab active">Body</span>
+                </div>
+                <div class="panel-body">
+                    <textarea id="request-body" spellcheck="false"></textarea>
+                </div>
+            </div>
+
+            <!-- Response Panel -->
+            <div class="response-panel">
+                <div class="panel-header">
+                    <span class="panel-tab right-tab active" data-right-tab="response" onclick="showRightTab('response')">Response</span>
+                    <span class="panel-tab right-tab" data-right-tab="docs" onclick="showRightTab('docs')">&#128214; Documentation</span>
+                </div>
+                <div id="response-content">
+                    <div id="response-status" class="response-status">
+                        <span style="color:var(--text-muted)">Send a request to see the response</span>
+                    </div>
+                    <div class="panel-body">
+                        <div id="response-body"></div>
+                    </div>
+                </div>
+                <div id="docs-content" class="docs-content" style="display:none">
+
+<!-- ============================================================== -->
+<!-- EMBEDDED API DOCUMENTATION                                      -->
+<!-- ============================================================== -->
+<h2>GarageMinder Mobile API v1 - Documentation</h2>
+<p>Complete REST API for the GarageMinder mobile companion apps (Android/iOS). This API coexists alongside the existing <code>/app/api.php</code> web app API.</p>
+
+<h3>Base URL</h3>
+<pre>https://trackmywrench.com/api/v1</pre>
+
+<h3>Authentication</h3>
+<p>The API uses JWT (JSON Web Tokens) for stateless authentication. Two login methods are supported:</p>
+<p><strong>Option A: Direct Login</strong> &mdash; Send username/password, receive tokens.</p>
+<pre>POST /auth/login
+{
+  "username": "user@example.com",
+  "password": "secret",
+  "device_name": "Pixel 8",    // optional
+  "platform": "android"         // optional
+}
+
+Response:
+{
+  "access_token": "eyJ...",
+  "refresh_token": "a1b2c3...",
+  "token_type": "Bearer",
+  "expires_in": 1800,
+  "user": {
+    "id": 123,
+    "username": "user@example.com",
+    "subscription_level": "paid"
+  }
+}</pre>
+
+<p><strong>Option B: Token Exchange</strong> &mdash; After WebView login, exchange WordPress cookie for JWT.</p>
+<pre>POST /auth/token-exchange
+Cookie: wordpress_logged_in_xxx=...
+{
+  "device_name": "Pixel 8",
+  "platform": "android"
+}
+
+Response: (same as login)</pre>
+
+<p><strong>Using Tokens:</strong> Include the access token in the Authorization header:</p>
+<pre>Authorization: Bearer eyJ...</pre>
+
+<p><strong>Token Refresh:</strong> When access token expires (30 min), use the refresh token:</p>
+<pre>POST /auth/refresh
+{ "refresh_token": "a1b2c3..." }
+
+Response:
+{
+  "access_token": "eyJ...(new)",
+  "refresh_token": "d4e5f6...(new)",
+  "expires_in": 1800
+}</pre>
+<p>Refresh tokens are rotated on each use (old token revoked, new one issued). Refresh tokens expire after 30 days.</p>
+
+<h3>Response Format</h3>
+<p>All responses use a consistent JSON envelope:</p>
+<pre>{
+  "success": true|false,
+  "data": { ... } | null,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable message",
+    "details": { ... }
+  } | null,
+  "meta": {
+    "api_version": "1.0.0",
+    "timestamp": 1707580800,
+    "pagination": { ... }  // when applicable
+  }
+}</pre>
+
+<h3>Error Codes</h3>
+<table style="width:100%;font-size:12px;border-collapse:collapse;">
+<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>400</code></td><td>BAD_REQUEST</td><td>Invalid input</td></tr>
+<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>401</code></td><td>UNAUTHORIZED / TOKEN_EXPIRED</td><td>Missing or invalid token</td></tr>
+<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>403</code></td><td>FORBIDDEN / ADMIN_REQUIRED</td><td>Insufficient permissions</td></tr>
+<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>404</code></td><td>NOT_FOUND</td><td>Resource not found</td></tr>
+<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>422</code></td><td>VALIDATION_ERROR</td><td>Field validation failed</td></tr>
+<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>429</code></td><td>RATE_LIMITED</td><td>Too many requests</td></tr>
+<tr><td style="padding:4px"><code>500</code></td><td>INTERNAL_ERROR</td><td>Server error</td></tr>
+</table>
+
+<h3>Rate Limiting</h3>
+<p>Per IP: <strong>200 req/min</strong>. Per user: <strong>100 req/min</strong>. Login: <strong>10 req/5min</strong>. Admin endpoints exempt.</p>
+<p>Headers: <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code></p>
+
+<hr style="border-color:var(--border);margin:20px 0">
+
+<h2>Endpoints Reference</h2>
+
+<h3>Authentication (5 endpoints)</h3>
+<p><code>POST /auth/login</code> &mdash; Direct credentials login. Returns JWT pair + user info.</p>
+<p><code>POST /auth/token-exchange</code> &mdash; WordPress cookie &rarr; JWT pair. Use after WebView login.</p>
+<p><code>POST /auth/refresh</code> &mdash; Rotate refresh token, get new access token.</p>
+<p><code>POST /auth/logout</code> &#128274; &mdash; Revoke refresh token. Send <code>all_devices: true</code> to revoke all.</p>
+<p><code>GET /auth/verify</code> &#128274; &mdash; Check token validity, returns user info + active session count.</p>
+
+<h3>User (3 endpoints)</h3>
+<p><code>GET /user/profile</code> &#128274; &mdash; User profile with subscription level and admin status.</p>
+<p><code>GET /user/preferences</code> &#128274; &mdash; Mobile app preferences (sync settings, etc).</p>
+<p><code>PUT /user/preferences</code> &#128274; &mdash; Update preferences. Allowed keys: <code>auto_sync_enabled</code>, <code>sync_frequency</code>, <code>sync_on_app_open</code>, <code>background_sync_enabled</code>, <code>show_sync_notifications</code>, <code>delete_gps_after_sync</code>, <code>sync_over_mobile_data</code>, <code>distance_unit</code>, <code>theme</code>.</p>
+
+<h3>Vehicles (5 endpoints)</h3>
+<p><code>GET /vehicles</code> &#128274; &mdash; All user vehicles with odometer, status, and display names.</p>
+<p><code>GET /vehicles/{id}</code> &#128274; &mdash; Single vehicle detail.</p>
+<p><code>PUT /vehicles/{id}/odometer</code> &#128274; &mdash; Update odometer. Body: <code>{"odometer": 52400}</code>. Validates: cannot decrease, max jump 10,000 mi.</p>
+<p><code>GET /vehicles/{id}/reminders</code> &#128274; &mdash; All reminders for a specific vehicle.</p>
+<p><code>GET /vehicles/{id}/reminders/due</code> &#128274; &mdash; Due/overdue reminders for vehicle. Query: <code>?days=30</code>.</p>
+
+<h3>Reminders (3 endpoints)</h3>
+<p><code>GET /reminders</code> &#128274; &mdash; All reminders across all user vehicles.</p>
+<p><code>GET /reminders/due</code> &#128274; &mdash; Due/overdue across all vehicles. Returns urgency level (overdue, urgent, upcoming, normal). Query: <code>?days=30</code>.</p>
+<p><code>GET /reminders/{id}</code> &#128274; &mdash; Single reminder detail with vehicle info.</p>
+
+<h3>Sync (3 endpoints)</h3>
+<p><code>POST /sync/push</code> &#128274; &mdash; Batch odometer updates. Body:</p>
+<pre>{ "vehicles": [
+    { "id": 1, "odometer": 52400 },
+    { "id": 2, "odometer": 78920 }
+]}</pre>
+<p>Returns per-vehicle success/failure with previous and new odometer values. Header: <code>X-Device-Id</code> for sync tracking.</p>
+<p><code>GET /sync/status</code> &#128274; &mdash; Last sync timestamps, total miles synced, sync count.</p>
+<p><code>POST /sync/register-device</code> &#128274; &mdash; Register mobile device for push notifications.</p>
+<pre>{ "device_id": "abc123", "platform": "android",
+  "device_name": "Pixel 8", "push_token": "fcm:..." }</pre>
+
+<h3>Subscription (1 endpoint)</h3>
+<p><code>GET /subscription/status</code> &#128274; &mdash; Subscription level + feature flags (auto_sync, etc).</p>
+
+<h3>Admin (4 endpoints) &#128737;</h3>
+<p>Require WordPress administrator role.</p>
+<p><code>GET /admin/test</code> &mdash; Verify admin access.</p>
+<p><code>GET /admin/users</code> &mdash; List all users with subscription info. Paginated: <code>?page=1&amp;per_page=50</code>.</p>
+<p><code>GET /admin/logs</code> &mdash; API request logs. Filters: <code>?user_id=&amp;endpoint=&amp;status_code=&amp;method=</code>.</p>
+<p><code>GET /admin/stats</code> &mdash; API usage statistics: requests, errors, auth, devices, sync totals, top endpoints.</p>
+
+<hr style="border-color:var(--border);margin:20px 0">
+
+<h2>Mobile Integration Guide</h2>
+
+<h3>Android (Kotlin) - Login Flow</h3>
+<pre>// Option A: Direct Login
+val response = api.login(LoginRequest(
+    username = "user@example.com",
+    password = "secret",
+    device_id = getDeviceId(),
+    platform = "android"
+))
+sessionManager.saveTokens(
+    response.access_token,
+    response.refresh_token
+)
+
+// Option B: WebView → Token Exchange
+// 1. User logs in via WebView to /login?mobile_app=1
+// 2. On redirect to /app/?login_success=1:
+val cookies = CookieManager.getInstance()
+    .getCookie("https://trackmywrench.com")
+val response = api.tokenExchange(cookies)
+sessionManager.saveTokens(...)</pre>
+
+<h3>Token Refresh (OkHttp Interceptor)</h3>
+<pre>class AuthInterceptor : Interceptor {
+    override fun intercept(chain: Chain): Response {
+        val request = chain.request().newBuilder()
+            .addHeader("Authorization",
+                "Bearer " + sessionManager.accessToken)
+            .build()
+        val response = chain.proceed(request)
+        if (response.code == 401) {
+            // Refresh token and retry
+            val newTokens = api.refresh(
+                sessionManager.refreshToken)
+            sessionManager.saveTokens(newTokens)
+            // Retry original request
+        }
+        return response
+    }
+}</pre>
+
+<h3>Sync Push</h3>
+<pre>// After trips complete, batch update odometers
+val syncPayload = SyncPushRequest(
+    vehicles = pendingVehicles.map {
+        VehicleUpdate(id = it.id,
+            odometer = it.adjustedOdometer
+                ?: it.calculatedOdometer)
+    }
+)
+val result = api.syncPush(syncPayload)
+// Mark successful vehicles as synced</pre>
+
+<h3>Privacy</h3>
+<p>GPS data <strong>never leaves the device</strong>. Only odometer deltas are synced. The mobile app calculates distance locally using GPS, then sends only the final odometer number per vehicle.</p>
+
+<hr style="border-color:var(--border);margin:20px 0">
+
+<h2>Security</h2>
+<p><strong>TLS:</strong> All traffic enforced HTTPS via .htaccess.</p>
+<p><strong>JWT:</strong> HMAC-SHA256 signed. Access tokens: 30 min. Refresh tokens: 30 days, rotated on use, stored as SHA-256 hash.</p>
+<p><strong>Rate Limiting:</strong> Database-backed sliding window per IP and per user.</p>
+<p><strong>Certificate Pinning:</strong> Recommended for mobile apps (see Blueprint).</p>
+<p><strong>Input Validation:</strong> All inputs sanitized. SQL injection prevented via PDO prepared statements.</p>
+<p><strong>CORS:</strong> Restricted to <code>trackmywrench.com</code>. Mobile apps (no Origin header) pass through.</p>
+
+<hr style="border-color:var(--border);margin:20px 0">
+
+<h2>Database Tables (API-specific)</h2>
+<p>These tables are <strong>new</strong> and do not touch existing GarageMinder tables:</p>
+<p><code>api_refresh_tokens</code> &mdash; JWT refresh token storage with device info.</p>
+<p><code>api_rate_limits</code> &mdash; Request throttling counters.</p>
+<p><code>api_devices</code> &mdash; Registered mobile devices.</p>
+<p><code>api_request_log</code> &mdash; Audit trail.</p>
+<p><code>api_user_preferences</code> &mdash; Mobile app settings.</p>
+<p><code>api_sync_status</code> &mdash; Sync tracking per user/device.</p>
+<p>Existing tables read (not modified): <code>wp_users</code>, <code>wp_usermeta</code>, <code>wp_swpm_members_tbl</code>, <code>wp_swpm_membership_tbl</code>, <code>gm_vehicles</code>, <code>gm_reminders</code>.</p>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="tester.js"></script>
+</body>
+</html>
