@@ -16,7 +16,7 @@ if (!defined('GM_API')) {
 // Path to existing GarageMinder config.php
 // Adjust this path based on your server layout
 // ============================================================================
-define('GM_CONFIG_PATH', __DIR__ . '/../../../config.php');
+define('GM_CONFIG_PATH', __DIR__ . '/home2/yesca/public_html/gm/garage/config.php');
 
 // ============================================================================
 // JWT Configuration
