@@ -1,238 +1,173 @@
 <?php
 /**
- * GarageMinder API - Step-by-step Bootstrap Debugger
- * This file manually walks through EXACTLY what index.php does,
- * catching every possible error including fatal/compile errors.
- * 
+ * GarageMinder API - Bootstrap Debugger
+ * Replicates EXACTLY what index.php does, step by step.
  * Upload to: gm/api/v1/apidebug.php
- * Visit: https://yesca.st/gm/api/v1/apidebug.php
  * DELETE after debugging!
  */
 
-// Force ALL errors visible - override everything
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
 
-// Catch fatal errors
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        if (!headers_sent()) {
-            header('Content-Type: application/json');
-        }
-        echo json_encode([
-            'FATAL_ERROR' => true,
-            'type' => $error['type'],
-            'message' => $error['message'],
-            'file' => $error['file'],
-            'line' => $error['line'],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if (!headers_sent()) header('Content-Type: application/json');
+        echo json_encode(['FATAL_ERROR' => $error], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 });
 
 header('Content-Type: application/json; charset=utf-8');
-
 $log = [];
 $step = 0;
 
-function logStep(string $msg, &$log, &$step) {
-    $step++;
-    $log[] = "Step {$step}: {$msg}";
-    // Flush after each step so we see where it dies
-}
-
-function dumpAndDie(array $log, ?Throwable $e = null) {
-    $result = ['steps_completed' => $log];
-    if ($e) {
-        $result['ERROR'] = [
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-            'trace' => explode("\n", $e->getTraceAsString()),
-        ];
-    }
-    echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+function s(string $msg, &$log, &$step) { $step++; $log[] = "Step {$step}: {$msg}"; }
+function fail(array $log, Throwable $e) {
+    echo json_encode(['steps' => $log, 'ERROR' => [
+        'message' => $e->getMessage(), 'file' => $e->getFile(),
+        'line' => $e->getLine(), 'trace' => explode("\n", $e->getTraceAsString()),
+    ]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-// ============================================================
-// Walk through EXACTLY what index.php does
-// ============================================================
+// === Step 1: Constants ===
+if (!defined('GM_API')) define('GM_API', true);
+if (!defined('GM_API_START')) define('GM_API_START', microtime(true));
+s('✅ Constants defined', $log, $step);
 
+// === Step 2: Config ===
 try {
-    // Step 1: Define constants
-    if (!defined('GM_API')) define('GM_API', true);
-    if (!defined('GM_API_START')) define('GM_API_START', microtime(true));
-    logStep('✅ Constants defined', $log, $step);
-
-    // Step 2: Load config
     require_once __DIR__ . '/config/api_config.php';
-    logStep('✅ api_config.php loaded', $log, $step);
-    
-    // Step 3: Autoloader
-    require_once __DIR__ . '/config/autoload.php';
-    logStep('✅ autoload.php loaded', $log, $step);
-    
-} catch (Throwable $e) {
-    logStep('❌ Config/autoload failed', $log, $step);
-    dumpAndDie($log, $e);
-}
+    s('✅ api_config.php loaded', $log, $step);
+} catch (Throwable $e) { s('❌ config failed', $log, $step); fail($log, $e); }
 
-// Step 4: Test each core class individually
-$coreClasses = [
-    'Database'   => 'GarageMinder\\API\\Core\\Database',
-    'Router'     => 'GarageMinder\\API\\Core\\Router',
-    'Request'    => 'GarageMinder\\API\\Core\\Request',
-    'Response'   => 'GarageMinder\\API\\Core\\Response',
-    'JWTHandler' => 'GarageMinder\\API\\Core\\JWTHandler',
-    'Validator'  => 'GarageMinder\\API\\Core\\Validator',
-    'Logger'     => 'GarageMinder\\API\\Core\\Logger',
-    'RateLimiter'=> 'GarageMinder\\API\\Core\\RateLimiter',
-    'Middleware'  => 'GarageMinder\\API\\Core\\Middleware',
+// === Step 3: Register autoloader (EXACTLY as index.php does it) ===
+spl_autoload_register(function (string $class) {
+    $prefix = 'GarageMinder\\API\\';
+    $baseDir = __DIR__ . '/';
+    if (strpos($class, $prefix) !== 0) return;
+    $relativeClass = substr($class, strlen($prefix));
+    $map = [
+        'Core\\'       => 'core/',
+        'Middleware\\' => 'middleware/',
+        'Models\\'     => 'models/',
+        'Endpoints\\' => 'endpoints/',
+    ];
+    foreach ($map as $nsPrefix => $dir) {
+        if (strpos($relativeClass, $nsPrefix) === 0) {
+            $classPath = substr($relativeClass, strlen($nsPrefix));
+            $file = $baseDir . $dir . str_replace('\\', '/', $classPath) . '.php';
+            if (file_exists($file)) { require_once $file; return; }
+            $parts = explode('\\', $classPath);
+            if (count($parts) > 1) {
+                $parts[0] = strtolower($parts[0]);
+                $file = $baseDir . $dir . implode('/', $parts) . '.php';
+                if (file_exists($file)) { require_once $file; return; }
+            }
+        }
+    }
+    $file = $baseDir . 'endpoints/' . str_replace('\\', '/', $relativeClass) . '.php';
+    if (file_exists($file)) { require_once $file; }
+});
+s('✅ Autoloader registered', $log, $step);
+
+// === Step 4: Load every class that index.php uses ===
+$allClasses = [
+    // Core
+    'GarageMinder\\API\\Core\\Router',
+    'GarageMinder\\API\\Core\\Request',
+    'GarageMinder\\API\\Core\\Response',
+    'GarageMinder\\API\\Core\\Database',
+    'GarageMinder\\API\\Core\\JWTHandler',
+    'GarageMinder\\API\\Core\\Validator',
+    'GarageMinder\\API\\Core\\Logger',
+    'GarageMinder\\API\\Core\\RateLimiter',
+    'GarageMinder\\API\\Core\\Middleware',
+    // Middleware
+    'GarageMinder\\API\\Middleware\\CorsMiddleware',
+    'GarageMinder\\API\\Middleware\\RateLimitMiddleware',
+    'GarageMinder\\API\\Middleware\\AuthMiddleware',
+    'GarageMinder\\API\\Middleware\\AdminMiddleware',
+    'GarageMinder\\API\\Middleware\\LoggingMiddleware',
+    // Models
+    'GarageMinder\\API\\Models\\User',
+    'GarageMinder\\API\\Models\\Vehicle',
+    'GarageMinder\\API\\Models\\Token',
+    'GarageMinder\\API\\Models\\Device',
+    'GarageMinder\\API\\Models\\Reminder',
+    // Auth endpoints
+    'GarageMinder\\API\\Endpoints\\BaseEndpoint',
+    'GarageMinder\\API\\Endpoints\\Auth\\LoginEndpoint',
+    'GarageMinder\\API\\Endpoints\\Auth\\TokenExchangeEndpoint',
+    'GarageMinder\\API\\Endpoints\\Auth\\RefreshEndpoint',
+    'GarageMinder\\API\\Endpoints\\Auth\\LogoutEndpoint',
+    'GarageMinder\\API\\Endpoints\\Auth\\VerifyEndpoint',
+    // User endpoints
+    'GarageMinder\\API\\Endpoints\\User\\ProfileEndpoint',
+    'GarageMinder\\API\\Endpoints\\User\\PreferencesEndpoint',
+    // Vehicle endpoints
+    'GarageMinder\\API\\Endpoints\\Vehicles\\ListEndpoint',
+    'GarageMinder\\API\\Endpoints\\Vehicles\\DetailEndpoint',
+    'GarageMinder\\API\\Endpoints\\Vehicles\\OdometerEndpoint',
+    'GarageMinder\\API\\Endpoints\\Vehicles\\RemindersEndpoint',
+    'GarageMinder\\API\\Endpoints\\Vehicles\\RemindersDueEndpoint',
+    // Reminder endpoints
+    'GarageMinder\\API\\Endpoints\\Reminders\\ListEndpoint',
+    'GarageMinder\\API\\Endpoints\\Reminders\\DueEndpoint',
+    'GarageMinder\\API\\Endpoints\\Reminders\\DetailEndpoint',
+    // Sync endpoints
+    'GarageMinder\\API\\Endpoints\\Sync\\PushEndpoint',
+    'GarageMinder\\API\\Endpoints\\Sync\\StatusEndpoint',
+    'GarageMinder\\API\\Endpoints\\Sync\\DeviceEndpoint',
+    // Subscription
+    'GarageMinder\\API\\Endpoints\\Subscription\\StatusEndpoint',
+    // Admin
+    'GarageMinder\\API\\Endpoints\\Admin\\TestEndpoint',
+    'GarageMinder\\API\\Endpoints\\Admin\\UsersEndpoint',
+    'GarageMinder\\API\\Endpoints\\Admin\\LogsEndpoint',
+    'GarageMinder\\API\\Endpoints\\Admin\\StatsEndpoint',
 ];
 
-foreach ($coreClasses as $name => $fqcn) {
+$missing = [];
+foreach ($allClasses as $fqcn) {
     try {
-        if (!class_exists($fqcn, true)) {
-            logStep("❌ Class not found: {$fqcn}", $log, $step);
+        if (class_exists($fqcn, true)) {
+            s("✅ {$fqcn}", $log, $step);
         } else {
-            logStep("✅ Class loaded: {$name}", $log, $step);
+            s("❌ NOT FOUND: {$fqcn}", $log, $step);
+            
+            // Show what file the autoloader would look for
+            $rel = str_replace('GarageMinder\\API\\', '', $fqcn);
+            $parts = explode('\\', $rel);
+            // Lowercase first part (namespace dir)
+            $parts[0] = strtolower($parts[0]);
+            if (count($parts) > 2) $parts[1] = strtolower($parts[1]);
+            $expectedFile = __DIR__ . '/' . implode('/', $parts) . '.php';
+            $missing[] = ['class' => $fqcn, 'expected_file' => $expectedFile, 'file_exists' => file_exists($expectedFile)];
         }
     } catch (Throwable $e) {
-        logStep("❌ Error loading {$name}: " . $e->getMessage(), $log, $step);
-        dumpAndDie($log, $e);
+        s("❌ ERROR loading {$fqcn}: " . $e->getMessage(), $log, $step);
+        fail($log, $e);
     }
 }
 
-// Step 5: Test middleware classes
-$middlewareClasses = [
-    'CorsMiddleware'      => 'GarageMinder\\API\\Middleware\\CorsMiddleware',
-    'AuthMiddleware'      => 'GarageMinder\\API\\Middleware\\AuthMiddleware',
-    'AdminMiddleware'     => 'GarageMinder\\API\\Middleware\\AdminMiddleware',
-    'RateLimitMiddleware' => 'GarageMinder\\API\\Middleware\\RateLimitMiddleware',
-    'LoggingMiddleware'   => 'GarageMinder\\API\\Middleware\\LoggingMiddleware',
-];
-
-foreach ($middlewareClasses as $name => $fqcn) {
-    try {
-        if (!class_exists($fqcn, true)) {
-            logStep("❌ Middleware not found: {$fqcn}", $log, $step);
-        } else {
-            logStep("✅ Middleware loaded: {$name}", $log, $step);
-        }
-    } catch (Throwable $e) {
-        logStep("❌ Error loading {$name}: " . $e->getMessage(), $log, $step);
-        dumpAndDie($log, $e);
-    }
-}
-
-// Step 6: Test model classes
-$modelClasses = [
-    'User'     => 'GarageMinder\\API\\Models\\User',
-    'Vehicle'  => 'GarageMinder\\API\\Models\\Vehicle',
-    'Token'    => 'GarageMinder\\API\\Models\\Token',
-    'Device'   => 'GarageMinder\\API\\Models\\Device',
-    'Reminder' => 'GarageMinder\\API\\Models\\Reminder',
-];
-
-foreach ($modelClasses as $name => $fqcn) {
-    try {
-        if (!class_exists($fqcn, true)) {
-            logStep("❌ Model not found: {$fqcn}", $log, $step);
-        } else {
-            logStep("✅ Model loaded: {$name}", $log, $step);
-        }
-    } catch (Throwable $e) {
-        logStep("❌ Error loading {$name}: " . $e->getMessage(), $log, $step);
-        dumpAndDie($log, $e);
-    }
-}
-
-// Step 7: Test endpoint classes
-$endpointClasses = [
-    'BaseEndpoint'     => 'GarageMinder\\API\\Endpoints\\BaseEndpoint',
-    'LoginEndpoint'    => 'GarageMinder\\API\\Endpoints\\Auth\\LoginEndpoint',
-    'TokenExchange'    => 'GarageMinder\\API\\Endpoints\\Auth\\TokenExchangeEndpoint',
-    'RefreshEndpoint'  => 'GarageMinder\\API\\Endpoints\\Auth\\RefreshEndpoint',
-    'VerifyEndpoint'   => 'GarageMinder\\API\\Endpoints\\Auth\\VerifyEndpoint',
-    'LogoutEndpoint'   => 'GarageMinder\\API\\Endpoints\\Auth\\LogoutEndpoint',
-    'VehicleList'      => 'GarageMinder\\API\\Endpoints\\Vehicles\\ListEndpoint',
-    'VehicleDetail'    => 'GarageMinder\\API\\Endpoints\\Vehicles\\DetailEndpoint',
-    'VehicleOdometer'  => 'GarageMinder\\API\\Endpoints\\Vehicles\\OdometerEndpoint',
-    'SyncPush'         => 'GarageMinder\\API\\Endpoints\\Sync\\PushEndpoint',
-    'SyncStatus'       => 'GarageMinder\\API\\Endpoints\\Sync\\StatusEndpoint',
-    'UserProfile'      => 'GarageMinder\\API\\Endpoints\\User\\ProfileEndpoint',
-];
-
-foreach ($endpointClasses as $name => $fqcn) {
-    try {
-        if (!class_exists($fqcn, true)) {
-            logStep("❌ Endpoint not found: {$fqcn}", $log, $step);
-        } else {
-            logStep("✅ Endpoint loaded: {$name}", $log, $step);
-        }
-    } catch (Throwable $e) {
-        logStep("❌ Error loading {$name}: " . $e->getMessage(), $log, $step);
-        dumpAndDie($log, $e);
-    }
-}
-
-// Step 8: Try creating a Request object (what Router does)
-try {
-    $request = new \GarageMinder\API\Core\Request();
-    logStep('✅ Request object created - method=' . $request->getMethod() . ' path=' . $request->getPath(), $log, $step);
-} catch (Throwable $e) {
-    logStep('❌ Request creation failed: ' . $e->getMessage(), $log, $step);
-    dumpAndDie($log, $e);
-}
-
-// Step 9: Try creating a Router and registering routes
+// === Step 5: Try creating Router + Request ===
 try {
     $router = new \GarageMinder\API\Core\Router();
-    logStep('✅ Router created', $log, $step);
+    s('✅ Router created', $log, $step);
     
-    // Check if routes.php exists
-    $routesFile = __DIR__ . '/config/routes.php';
-    if (file_exists($routesFile)) {
-        require_once $routesFile;
-        logStep('✅ routes.php loaded', $log, $step);
-    } else {
-        logStep('❌ routes.php NOT FOUND at: ' . $routesFile, $log, $step);
-    }
+    $request = new \GarageMinder\API\Core\Request();
+    s('✅ Request created: ' . $request->getMethod() . ' ' . $request->getPath(), $log, $step);
 } catch (Throwable $e) {
-    logStep('❌ Router/routes failed: ' . $e->getMessage(), $log, $step);
-    dumpAndDie($log, $e);
+    s('❌ Router/Request failed', $log, $step);
+    fail($log, $e);
 }
 
-// Step 10: Try dispatching (without actually running)
-try {
-    // Show what the router would do
-    logStep('✅ All classes loaded successfully', $log, $step);
-    logStep('ℹ️ REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? 'not set'), $log, $step);
-    logStep('ℹ️ SCRIPT_NAME: ' . ($_SERVER['SCRIPT_NAME'] ?? 'not set'), $log, $step);
-    logStep('ℹ️ PATH_INFO: ' . ($_SERVER['PATH_INFO'] ?? 'not set'), $log, $step);
-    logStep('ℹ️ API_PREFIX: ' . (defined('API_PREFIX') ? API_PREFIX : 'not defined'), $log, $step);
-} catch (Throwable $e) {
-    logStep('❌ ' . $e->getMessage(), $log, $step);
-}
-
-// Step 11: Now try ACTUALLY running index.php logic
-try {
-    // This is what index.php does after loading
-    logStep('🔄 About to call Router::dispatch()...', $log, $step);
-    
-    // Don't actually dispatch - just confirm everything loaded
-    logStep('✅ Bootstrap complete - all ' . $step . ' steps passed', $log, $step);
-} catch (Throwable $e) {
-    logStep('❌ Dispatch failed: ' . $e->getMessage(), $log, $step);
-    dumpAndDie($log, $e);
-}
-
-// Final output
+// === Summary ===
 echo json_encode([
-    'status' => '✅ ALL BOOTSTRAP STEPS PASSED',
+    'status' => empty($missing) ? '✅ ALL CLASSES LOADED - ready for dispatch' : '❌ MISSING CLASSES - see list',
     'total_steps' => $step,
+    'missing_classes' => $missing,
     'steps' => $log,
-    'note' => 'If index.php still 500s, the error is in Router::dispatch() or .htaccess rewriting. Check Step 10 SERVER vars above.',
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
