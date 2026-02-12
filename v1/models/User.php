@@ -72,8 +72,6 @@ class User
         // WordPress 6.8+ bcrypt: "$wp$2y$10$..." 
         // Password is pre-hashed: base64(HMAC-SHA384(password, "wp-sha384"))
         // Then bcrypt of that pre-hash is stored with "$wp$" prefix
-        // To verify: pre-hash the input password the same way, then password_verify
-        // against the hash with "$wp" stripped (3 chars, keeping the leading "$")
         if (strpos($hash, '$wp$') === 0) {
             $passwordToVerify = base64_encode(
                 hash_hmac('sha384', $password, 'wp-sha384', true)
@@ -91,43 +89,179 @@ class User
     }
 
     /**
-     * Get user's subscription level from Simple Membership plugin
+     * Get user's subscription level.
+     * 
+     * Uses the GarageMinder app's gm_get_current_user_info() approach:
+     * Includes the garage config.php which defines that function,
+     * then calls it to get has_subscription, subscription_tier, etc.
+     * 
+     * This way the API always matches whatever subscription plugin 
+     * the garage app is configured to use — no hardcoded plugin tables.
      */
-    public function getSubscriptionLevel(int $userId): string
+    public function getSubscriptionLevel(int $userId): array
     {
-        $tMembers = $this->t('swpm_members_tbl');
-        $tLevels = $this->t('swpm_membership_tbl');
-
-        $member = $this->wpDb->fetchOne(
-            "SELECT membership_level, account_state FROM `{$tMembers}` WHERE member_id = ?",
-            [$userId]
-        );
-
-        if (!$member || $member['account_state'] !== 'active') {
-            return 'free';
+        // Try the GarageMinder config approach first
+        $result = $this->getSubscriptionFromGarageConfig($userId);
+        if ($result !== null) {
+            return $result;
         }
 
-        $level = $this->wpDb->fetchOne(
-            "SELECT id, alias FROM `{$tLevels}` WHERE id = ?",
-            [$member['membership_level']]
-        );
+        // Fallback: return free with unknown tier
+        return [
+            'has_subscription' => false,
+            'subscription_tier' => 'free',
+            'subscription_level_name' => 'Free',
+        ];
+    }
 
-        if (!$level) return 'free';
+    /**
+     * Load GarageMinder's config.php and use gm_get_current_user_info()
+     * to determine subscription status.
+     */
+    private function getSubscriptionFromGarageConfig(int $userId): ?array
+    {
+        // GM_CONFIG_PATH is set in api_config.php — points to the garage app's config.php
+        if (!defined('GM_CONFIG_PATH') || !file_exists(GM_CONFIG_PATH)) {
+            return null;
+        }
 
-        $paidAliases = ['paid', 'premium', 'pro', 'subscriber'];
-        $alias = strtolower($level['alias'] ?? '');
-
-        foreach ($paidAliases as $paidAlias) {
-            if (strpos($alias, $paidAlias) !== false) {
-                return 'paid';
+        try {
+            // Include the garage config if gm_get_current_user_info is not yet available
+            if (!function_exists('gm_get_current_user_info')) {
+                // The garage config.php may need WordPress functions or globals.
+                // We'll try including it, but if it fails we fall back gracefully.
+                @include_once GM_CONFIG_PATH;
             }
+
+            if (function_exists('gm_get_current_user_info')) {
+                $info = gm_get_current_user_info($userId);
+                if (is_array($info)) {
+                    return [
+                        'has_subscription' => !empty($info['has_subscription']),
+                        'subscription_tier' => $info['subscription_tier'] ?? 'free',
+                        'subscription_level_name' => $info['subscription_level_name'] ?? 'Free',
+                    ];
+                }
+            }
+
+            // If function doesn't exist after include, try direct DB query
+            // against whatever subscription data the garage DB holds
+            return $this->getSubscriptionFromGarageDB($userId);
+
+        } catch (\Throwable $e) {
+            // Config include failed — try direct DB approach
+            return $this->getSubscriptionFromGarageDB($userId);
+        }
+    }
+
+    /**
+     * Fallback: Query the GarageMinder database directly for subscription info.
+     * Checks common subscription/membership patterns without assuming a specific plugin.
+     */
+    private function getSubscriptionFromGarageDB(int $userId): ?array
+    {
+        // Try reading garage config.php to find subscription logic
+        // Check if there's a user_subscriptions or similar table in the GM database
+        try {
+            // Check for a subscriptions table in the GarageMinder DB
+            $tables = ['user_subscriptions', 'subscriptions', 'memberships', 'user_memberships'];
+            foreach ($tables as $table) {
+                if ($this->gmDb->tableExists($table)) {
+                    $sub = $this->gmDb->fetchOne(
+                        "SELECT * FROM `{$table}` WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+                        [$userId]
+                    );
+                    if ($sub) {
+                        // Found subscription data — interpret it
+                        $isActive = !empty($sub['is_active']) || 
+                                    (!empty($sub['status']) && strtolower($sub['status']) === 'active') ||
+                                    (!empty($sub['account_state']) && strtolower($sub['account_state']) === 'active');
+                        $tier = $sub['tier'] ?? $sub['level'] ?? $sub['plan'] ?? 'free';
+                        $name = $sub['level_name'] ?? $sub['plan_name'] ?? ucfirst($tier);
+                        
+                        return [
+                            'has_subscription' => $isActive && strtolower($tier) !== 'free',
+                            'subscription_tier' => strtolower($tier),
+                            'subscription_level_name' => $name,
+                        ];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore DB errors in fallback
         }
 
-        if ((int) $level['id'] > 1) {
-            return 'paid';
-        }
+        // Last resort: try WordPress SWPM tables (Simple WP Membership)
+        return $this->getSubscriptionFromSWPM($userId);
+    }
 
-        return 'free';
+    /**
+     * Last-resort fallback: Check Simple WP Membership plugin tables.
+     * Only used if gm_get_current_user_info() is unavailable AND
+     * no subscription table found in GarageMinder DB.
+     */
+    private function getSubscriptionFromSWPM(int $userId): ?array
+    {
+        try {
+            $tMembers = $this->t('swpm_members_tbl');
+            $tLevels = $this->t('swpm_membership_tbl');
+
+            // Check if tables exist
+            if (!$this->wpDb->tableExists($tMembers)) {
+                return null;
+            }
+
+            $member = $this->wpDb->fetchOne(
+                "SELECT membership_level, account_state FROM `{$tMembers}` WHERE member_id = ?",
+                [$userId]
+            );
+
+            if (!$member || $member['account_state'] !== 'active') {
+                return [
+                    'has_subscription' => false,
+                    'subscription_tier' => 'free',
+                    'subscription_level_name' => 'Free',
+                ];
+            }
+
+            $level = $this->wpDb->fetchOne(
+                "SELECT id, alias FROM `{$tLevels}` WHERE id = ?",
+                [$member['membership_level']]
+            );
+
+            if (!$level) {
+                return [
+                    'has_subscription' => false,
+                    'subscription_tier' => 'free',
+                    'subscription_level_name' => 'Free',
+                ];
+            }
+
+            $alias = strtolower($level['alias'] ?? '');
+            $paidKeywords = ['paid', 'premium', 'pro', 'subscriber', 'plus', 'business', 'enterprise'];
+            $isPaid = false;
+            
+            foreach ($paidKeywords as $keyword) {
+                if (strpos($alias, $keyword) !== false) {
+                    $isPaid = true;
+                    break;
+                }
+            }
+
+            // Also consider level ID > 1 as paid (common SWPM pattern)
+            if (!$isPaid && (int) $level['id'] > 1) {
+                $isPaid = true;
+            }
+
+            return [
+                'has_subscription' => $isPaid,
+                'subscription_tier' => $isPaid ? 'paid' : 'free',
+                'subscription_level_name' => $level['alias'] ?? ($isPaid ? 'Paid' : 'Free'),
+            ];
+
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -157,7 +291,12 @@ class User
         $user = $this->findById($userId);
         if (!$user) return null;
 
-        $user['subscription_level'] = $this->getSubscriptionLevel($userId);
+        $subscription = $this->getSubscriptionLevel($userId);
+        $user['has_subscription'] = $subscription['has_subscription'];
+        $user['subscription_tier'] = $subscription['subscription_tier'];
+        $user['subscription_level_name'] = $subscription['subscription_level_name'];
+        // Keep backward compat: subscription_level maps to tier
+        $user['subscription_level'] = $subscription['subscription_tier'];
         $user['is_admin'] = $this->isAdmin($userId);
 
         return $user;

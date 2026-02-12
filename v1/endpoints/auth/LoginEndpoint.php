@@ -53,8 +53,8 @@ class LoginEndpoint extends BaseEndpoint
             $request->getUserAgent()
         );
 
-        // Get subscription level
-        $subscriptionLevel = $userModel->getSubscriptionLevel($userId);
+        // Get subscription info (uses garage app's gm_get_current_user_info when available)
+        $subscription = $userModel->getSubscriptionLevel($userId);
 
         Response::success([
             'access_token'  => $accessToken,
@@ -62,11 +62,15 @@ class LoginEndpoint extends BaseEndpoint
             'token_type'    => 'Bearer',
             'expires_in'    => JWT_ACCESS_TOKEN_EXPIRY,
             'user' => [
-                'id'                 => $userId,
-                'username'           => $user['username'],
-                'email'              => $user['email'],
-                'display_name'       => $user['display_name'],
-                'subscription_level' => $subscriptionLevel,
+                'id'                      => $userId,
+                'username'                => $user['username'],
+                'email'                   => $user['email'],
+                'display_name'            => $user['display_name'],
+                'has_subscription'        => $subscription['has_subscription'],
+                'subscription_tier'       => $subscription['subscription_tier'],
+                'subscription_level_name' => $subscription['subscription_level_name'],
+                // Backward compat
+                'subscription_level'      => $subscription['subscription_tier'],
             ],
         ]);
     }
