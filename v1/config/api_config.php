@@ -171,7 +171,7 @@ define('API_VERSION', '1.0.0');
 $_scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '/api/v1/index.php');
 define('API_PREFIX', rtrim($_scriptDir, '/'));
 
-define('API_DEBUG', true);                        // TODO: Set false for production!
+define('API_DEBUG', false);                        // TODO: Set false for production!
 define('API_LOG_REQUESTS', true);
 define('API_LOG_BODY', false);
 define('API_MAX_BODY_SIZE', 1048576);
