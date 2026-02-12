@@ -77,150 +77,1077 @@
                 <div id="docs-content" class="docs-content" style="display:none">
 
 <!-- ============================================================== -->
-<!-- EMBEDDED API DOCUMENTATION                                      -->
+<!-- EMBEDDED API DOCUMENTATION — COMPREHENSIVE                      -->
 <!-- ============================================================== -->
-<h2>GarageMinder Mobile API v1 - Documentation</h2>
-<p>Complete REST API for the GarageMinder mobile companion apps (Android/iOS). This API coexists alongside the existing <code>/app/api.php</code> web app API.</p>
 
-<h3>Base URL</h3>
+<h2>GarageMinder Mobile API v1</h2>
+<p>Complete REST API for the GarageMinder mobile companion apps (Android &amp; iOS). Coexists alongside the <code>/app/api.php</code> web app API.</p>
+
+<!-- ===== OVERVIEW ===== -->
+<h3 id="doc-base-url">Base URL</h3>
 <pre>https://trackmywrench.com/api/v1</pre>
 
-<h3>Authentication</h3>
-<p>The API uses JWT (JSON Web Tokens) for stateless authentication. Two login methods are supported:</p>
-<p><strong>Option A: Direct Login</strong> &mdash; Send username/password, receive tokens.</p>
-<pre>POST /auth/login
-{
-  "username": "user@example.com",
-  "password": "secret",
-  "device_name": "Pixel 8",    // optional
-  "platform": "android"         // optional
-}
+<h3 id="doc-auth-overview">Authentication</h3>
+<p>JWT (JSON Web Tokens) via two login methods. All authenticated endpoints require:</p>
+<pre>Authorization: Bearer &lt;access_token&gt;</pre>
+<p>Access tokens expire in <strong>30 minutes</strong>. Refresh tokens expire in <strong>30 days</strong> and are rotated on each use.</p>
 
-Response:
-{
-  "access_token": "eyJ...",
-  "refresh_token": "a1b2c3...",
-  "token_type": "Bearer",
-  "expires_in": 1800,
-  "user": {
-    "id": 123,
-    "username": "user@example.com",
-    "subscription_level": "paid"
-  }
-}</pre>
-
-<p><strong>Option B: Token Exchange</strong> &mdash; After WebView login, exchange WordPress cookie for JWT.</p>
-<pre>POST /auth/token-exchange
-Cookie: wordpress_logged_in_xxx=...
-{
-  "device_name": "Pixel 8",
-  "platform": "android"
-}
-
-Response: (same as login)</pre>
-
-<p><strong>Using Tokens:</strong> Include the access token in the Authorization header:</p>
-<pre>Authorization: Bearer eyJ...</pre>
-
-<p><strong>Token Refresh:</strong> When access token expires (30 min), use the refresh token:</p>
-<pre>POST /auth/refresh
-{ "refresh_token": "a1b2c3..." }
-
-Response:
-{
-  "access_token": "eyJ...(new)",
-  "refresh_token": "d4e5f6...(new)",
-  "expires_in": 1800
-}</pre>
-<p>Refresh tokens are rotated on each use (old token revoked, new one issued). Refresh tokens expire after 30 days.</p>
-
-<h3>Response Format</h3>
-<p>All responses use a consistent JSON envelope:</p>
+<h3 id="doc-response-format">Response Envelope</h3>
+<p>Every response uses this JSON structure:</p>
 <pre>{
-  "success": true|false,
-  "data": { ... } | null,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable message",
-    "details": { ... }
-  } | null,
+  "success": true,
+  "data": { ... },
+  "error": null,
   "meta": {
     "api_version": "1.0.0",
-    "timestamp": 1707580800,
-    "pagination": { ... }  // when applicable
+    "timestamp": 1707580800
   }
 }</pre>
+<p>Error responses:</p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable message",
+    "details": { ... }
+  },
+  "meta": { ... }
+}</pre>
 
-<h3>Error Codes</h3>
-<table style="width:100%;font-size:12px;border-collapse:collapse;">
-<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>400</code></td><td>BAD_REQUEST</td><td>Invalid input</td></tr>
-<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>401</code></td><td>UNAUTHORIZED / TOKEN_EXPIRED</td><td>Missing or invalid token</td></tr>
-<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>403</code></td><td>FORBIDDEN / ADMIN_REQUIRED</td><td>Insufficient permissions</td></tr>
-<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>404</code></td><td>NOT_FOUND</td><td>Resource not found</td></tr>
-<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>422</code></td><td>VALIDATION_ERROR</td><td>Field validation failed</td></tr>
-<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px"><code>429</code></td><td>RATE_LIMITED</td><td>Too many requests</td></tr>
-<tr><td style="padding:4px"><code>500</code></td><td>INTERNAL_ERROR</td><td>Server error</td></tr>
+<h3 id="doc-error-codes">Error Codes</h3>
+<table class="doc-table">
+<tr><td><code>400</code></td><td>BAD_REQUEST</td><td>Invalid input or malformed body</td></tr>
+<tr><td><code>401</code></td><td>UNAUTHORIZED / TOKEN_EXPIRED / INVALID_CREDENTIALS</td><td>Missing, invalid, or expired token</td></tr>
+<tr><td><code>403</code></td><td>FORBIDDEN / ADMIN_REQUIRED</td><td>Insufficient permissions</td></tr>
+<tr><td><code>404</code></td><td>NOT_FOUND</td><td>Resource does not exist or not owned by user</td></tr>
+<tr><td><code>422</code></td><td>VALIDATION_ERROR / ODOMETER_DECREASE / ODOMETER_JUMP_TOO_LARGE</td><td>Field validation failed</td></tr>
+<tr><td><code>429</code></td><td>RATE_LIMITED</td><td>Too many requests</td></tr>
+<tr><td><code>500</code></td><td>INTERNAL_ERROR</td><td>Server error</td></tr>
 </table>
 
-<h3>Rate Limiting</h3>
-<p>Per IP: <strong>200 req/min</strong>. Per user: <strong>100 req/min</strong>. Login: <strong>10 req/5min</strong>. Admin endpoints exempt.</p>
+<h3 id="doc-rate-limits">Rate Limiting</h3>
+<p>Per IP: <strong>200 req/min</strong> &middot; Per user: <strong>100 req/min</strong> &middot; Login: <strong>10 req/5 min</strong></p>
 <p>Headers: <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code></p>
 
-<hr style="border-color:var(--border);margin:20px 0">
+<h3 id="doc-id-types">Important: ID Types</h3>
+<p>Vehicle and reminder IDs are <strong>strings</strong> (varchar 64), not integers. Example vehicle ID: <code>v_1766985747930_q4x1fvgxzde</code>. Always treat IDs as opaque strings.</p>
 
-<h2>Endpoints Reference</h2>
+<hr class="doc-divider">
 
-<h3>Authentication (5 endpoints)</h3>
-<p><code>POST /auth/login</code> &mdash; Direct credentials login. Returns JWT pair + user info.</p>
-<p><code>POST /auth/token-exchange</code> &mdash; WordPress cookie &rarr; JWT pair. Use after WebView login.</p>
-<p><code>POST /auth/refresh</code> &mdash; Rotate refresh token, get new access token.</p>
-<p><code>POST /auth/logout</code> &#128274; &mdash; Revoke refresh token. Send <code>all_devices: true</code> to revoke all.</p>
-<p><code>GET /auth/verify</code> &#128274; &mdash; Check token validity, returns user info + active session count.</p>
+<!-- ===== AUTHENTICATION ENDPOINTS ===== -->
+<h2 id="doc-auth">&#128274; Authentication</h2>
 
-<h3>User (3 endpoints)</h3>
-<p><code>GET /user/profile</code> &#128274; &mdash; User profile with subscription level and admin status.</p>
-<p><code>GET /user/preferences</code> &#128274; &mdash; Mobile app preferences (sync settings, etc).</p>
-<p><code>PUT /user/preferences</code> &#128274; &mdash; Update preferences. Allowed keys: <code>auto_sync_enabled</code>, <code>sync_frequency</code>, <code>sync_on_app_open</code>, <code>background_sync_enabled</code>, <code>show_sync_notifications</code>, <code>delete_gps_after_sync</code>, <code>sync_over_mobile_data</code>, <code>distance_unit</code>, <code>theme</code>.</p>
+<!-- POST /auth/login -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-post">POST</span> /auth/login</h4>
+<p class="ep-desc">Authenticate with username/email and password. Returns JWT access + refresh tokens.</p>
+<p class="ep-auth">&#128275; No authentication required</p>
 
-<h3>Vehicles (5 endpoints)</h3>
-<p><code>GET /vehicles</code> &#128274; &mdash; All user vehicles with odometer, status, and display names.</p>
-<p><code>GET /vehicles/{id}</code> &#128274; &mdash; Single vehicle detail.</p>
-<p><code>PUT /vehicles/{id}/odometer</code> &#128274; &mdash; Update odometer. Body: <code>{"odometer": 52400}</code>. Validates: cannot decrease, max jump 10,000 mi.</p>
-<p><code>GET /vehicles/{id}/reminders</code> &#128274; &mdash; All reminders for a specific vehicle.</p>
-<p><code>GET /vehicles/{id}/reminders/due</code> &#128274; &mdash; Due/overdue reminders for vehicle. Query: <code>?days=30</code>.</p>
+<p class="ep-label">Request Body</p>
+<pre>{
+  "username": "user@example.com",
+  "password": "yourpassword",
+  "device_id": "android_abc123",
+  "device_name": "Pixel 8 Pro",
+  "platform": "android"
+}</pre>
+<table class="param-table">
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>username</code></td><td>string</td><td>Yes</td><td>Username or email address</td></tr>
+<tr><td><code>password</code></td><td>string</td><td>Yes</td><td>Account password</td></tr>
+<tr><td><code>device_id</code></td><td>string</td><td>No</td><td>Unique device identifier for session tracking</td></tr>
+<tr><td><code>device_name</code></td><td>string</td><td>No</td><td>Human-friendly device name</td></tr>
+<tr><td><code>platform</code></td><td>string</td><td>No</td><td><code>android</code> or <code>ios</code></td></tr>
+</table>
 
-<h3>Reminders (3 endpoints)</h3>
-<p><code>GET /reminders</code> &#128274; &mdash; All reminders across all user vehicles.</p>
-<p><code>GET /reminders/due</code> &#128274; &mdash; Due/overdue across all vehicles. Returns urgency level (overdue, urgent, upcoming, normal). Query: <code>?days=30</code>.</p>
-<p><code>GET /reminders/{id}</code> &#128274; &mdash; Single reminder detail with vehicle info.</p>
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "a1b2c3d4e5f6g7h8i9j0...",
+    "token_type": "Bearer",
+    "expires_in": 1800,
+    "user": {
+      "id": 42,
+      "username": "user@example.com",
+      "email": "user@example.com",
+      "display_name": "John Doe",
+      "subscription_level": "paid"
+    }
+  },
+  "error": null,
+  "meta": { "api_version": "1.0.0", "timestamp": 1739404800 }
+}</pre>
 
-<h3>Sync (3 endpoints)</h3>
-<p><code>POST /sync/push</code> &#128274; &mdash; Batch odometer updates. Body:</p>
-<pre>{ "vehicles": [
-    { "id": 1, "odometer": 52400 },
-    { "id": 2, "odometer": 78920 }
-]}</pre>
-<p>Returns per-vehicle success/failure with previous and new odometer values. Header: <code>X-Device-Id</code> for sync tracking.</p>
-<p><code>GET /sync/status</code> &#128274; &mdash; Last sync timestamps, total miles synced, sync count.</p>
-<p><code>POST /sync/register-device</code> &#128274; &mdash; Register mobile device for push notifications.</p>
-<pre>{ "device_id": "abc123", "platform": "android",
-  "device_name": "Pixel 8", "push_token": "fcm:..." }</pre>
+<p class="ep-label">Error Response <span class="status-pill s401">401</span></p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Invalid username or password.",
+    "details": null
+  },
+  "meta": { "api_version": "1.0.0", "timestamp": 1739404800 }
+}</pre>
+</div>
 
-<h3>Subscription (1 endpoint)</h3>
-<p><code>GET /subscription/status</code> &#128274; &mdash; Subscription level + feature flags (auto_sync, etc).</p>
+<!-- POST /auth/token-exchange -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-post">POST</span> /auth/token-exchange</h4>
+<p class="ep-desc">Exchange a WordPress session cookie (from WebView login) for JWT tokens. Use this after the user completes login via the WebView flow in the mobile app.</p>
+<p class="ep-auth">&#128275; Requires WordPress session cookie (sent as <code>Cookie</code> header)</p>
 
-<h3>Admin (4 endpoints) &#128737;</h3>
-<p>Require WordPress administrator role.</p>
-<p><code>GET /admin/test</code> &mdash; Verify admin access.</p>
-<p><code>GET /admin/users</code> &mdash; List all users with subscription info. Paginated: <code>?page=1&amp;per_page=50</code>.</p>
-<p><code>GET /admin/logs</code> &mdash; API request logs. Filters: <code>?user_id=&amp;endpoint=&amp;status_code=&amp;method=</code>.</p>
-<p><code>GET /admin/stats</code> &mdash; API usage statistics: requests, errors, auth, devices, sync totals, top endpoints.</p>
+<p class="ep-label">Request Headers</p>
+<pre>Cookie: wordpress_logged_in_abc123=user%7C1739404800%7Ctoken%7Chmac</pre>
 
-<hr style="border-color:var(--border);margin:20px 0">
+<p class="ep-label">Request Body</p>
+<pre>{
+  "device_id": "android_abc123",
+  "device_name": "Pixel 8 Pro",
+  "platform": "android"
+}</pre>
 
-<h2>Mobile Integration Guide</h2>
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "x9y8z7w6v5u4t3...",
+    "token_type": "Bearer",
+    "expires_in": 1800,
+    "user": {
+      "id": 42,
+      "username": "user@example.com",
+      "email": "user@example.com",
+      "display_name": "John Doe",
+      "subscription_level": "paid"
+    }
+  },
+  "error": null,
+  "meta": { "api_version": "1.0.0", "timestamp": 1739404800 }
+}</pre>
 
-<h3>Android (Kotlin) - Login Flow</h3>
+<p class="ep-label">Error Response <span class="status-pill s401">401</span></p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "NO_WP_SESSION",
+    "message": "No WordPress session cookie found. Log in via WebView first.",
+    "details": null
+  },
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- POST /auth/refresh -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-post">POST</span> /auth/refresh</h4>
+<p class="ep-desc">Rotate a refresh token to get new access + refresh tokens. The old refresh token is revoked.</p>
+<p class="ep-auth">&#128275; No Bearer token required; uses refresh token in body</p>
+
+<p class="ep-label">Request Body</p>
+<pre>{
+  "refresh_token": "a1b2c3d4e5f6g7h8i9j0..."
+}</pre>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...(new)",
+    "refresh_token": "q1w2e3r4t5y6u7...(new)",
+    "token_type": "Bearer",
+    "expires_in": 1800
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+
+<p class="ep-label">Error Response <span class="status-pill s401">401</span></p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "REFRESH_FAILED",
+    "message": "Invalid or expired refresh token. Please log in again.",
+    "details": null
+  },
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- POST /auth/logout -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-post">POST</span> /auth/logout</h4>
+<p class="ep-desc">Revoke a refresh token. Optionally revoke all tokens for the user (logout all devices).</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Request Body</p>
+<pre>{
+  "refresh_token": "a1b2c3d4e5...",
+  "all_devices": false
+}</pre>
+<table class="param-table">
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>refresh_token</code></td><td>string</td><td>No</td><td>Specific token to revoke</td></tr>
+<tr><td><code>all_devices</code></td><td>boolean</td><td>No</td><td>Set <code>true</code> to revoke ALL sessions</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": { "message": "Logged out successfully." },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /auth/verify -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /auth/verify</h4>
+<p class="ep-desc">Verify that the current access token is valid. Returns user info and active session count.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "valid": true,
+    "user": {
+      "id": 42,
+      "username": "user@example.com",
+      "email": "user@example.com",
+      "display_name": "John Doe",
+      "subscription_level": "paid"
+    },
+    "active_sessions": 2
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== USER ENDPOINTS ===== -->
+<h2 id="doc-user">&#128100; User</h2>
+
+<!-- GET /user/profile -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /user/profile</h4>
+<p class="ep-desc">Get the authenticated user's profile including subscription level and admin status.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "id": 42,
+    "username": "user@example.com",
+    "email": "user@example.com",
+    "display_name": "John Doe",
+    "subscription_level": "paid",
+    "is_admin": false,
+    "active_sessions": 2
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /user/preferences -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /user/preferences</h4>
+<p class="ep-desc">Get the user's mobile app preferences (sync settings, theme, etc). Returns key-value pairs.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "auto_sync_enabled": true,
+    "sync_frequency": "DAILY",
+    "sync_on_app_open": true,
+    "background_sync_enabled": true,
+    "show_sync_notifications": true,
+    "delete_gps_after_sync": false,
+    "sync_over_mobile_data": true,
+    "distance_unit": "miles",
+    "theme": "dark"
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+<p><em>Note: Returns empty object <code>{}</code> if no preferences have been set.</em></p>
+</div>
+
+<!-- PUT /user/preferences -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-put">PUT</span> /user/preferences</h4>
+<p class="ep-desc">Update one or more mobile app preferences. Only allowed keys are saved; unknown keys are ignored.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Allowed Preference Keys</p>
+<table class="param-table">
+<tr><th>Key</th><th>Type</th><th>Values</th></tr>
+<tr><td><code>auto_sync_enabled</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>sync_frequency</code></td><td>string</td><td><code>AFTER_TRIP</code>, <code>DAILY</code>, <code>WEEKLY</code></td></tr>
+<tr><td><code>sync_on_app_open</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>background_sync_enabled</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>show_sync_notifications</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>delete_gps_after_sync</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>sync_over_mobile_data</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+<tr><td><code>distance_unit</code></td><td>string</td><td><code>miles</code>, <code>km</code></td></tr>
+<tr><td><code>theme</code></td><td>string</td><td><code>light</code>, <code>dark</code>, <code>system</code></td></tr>
+<tr><td><code>notification_reminders</code></td><td>boolean</td><td><code>true</code>/<code>false</code></td></tr>
+</table>
+
+<p class="ep-label">Request Body</p>
+<pre>{
+  "auto_sync_enabled": true,
+  "sync_frequency": "DAILY",
+  "theme": "dark"
+}</pre>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "updated": {
+      "auto_sync_enabled": true,
+      "sync_frequency": "DAILY",
+      "theme": "dark"
+    }
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== VEHICLES ENDPOINTS ===== -->
+<h2 id="doc-vehicles">&#128663; Vehicles</h2>
+
+<!-- GET /vehicles -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /vehicles</h4>
+<p class="ep-desc">List all vehicles belonging to the authenticated user.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": [
+    {
+      "id": "v_1766985747930_q4x1fvgxzde",
+      "user_id": "42",
+      "name": "My Daily Driver",
+      "display_name": "2018 Honda Accord",
+      "vin": "1HGBH41JXMN109186",
+      "plate": "ABC1234",
+      "year": 2018,
+      "make": "Honda",
+      "model": "Accord",
+      "engine": "1.5L Turbo I4",
+      "body_class": "Sedan",
+      "odometer": 52392,
+      "photo_path": "/uploads/vehicles/honda_accord.jpg",
+      "insurance_expiry": "2026-06-15",
+      "registration_expiry": "2026-03-20"
+    },
+    {
+      "id": "v_1766985812456_m8k2prnxw7h",
+      "user_id": "42",
+      "name": "Weekend Car",
+      "display_name": "2015 Toyota Camry",
+      "vin": null,
+      "plate": "XYZ5678",
+      "year": 2015,
+      "make": "Toyota",
+      "model": "Camry",
+      "engine": null,
+      "body_class": null,
+      "odometer": 78900,
+      "photo_path": null,
+      "insurance_expiry": null,
+      "registration_expiry": null
+    }
+  ],
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /vehicles/{id} -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /vehicles/{id}</h4>
+<p class="ep-desc">Get a single vehicle by its ID. Returns 404 if not found or not owned by user.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">URL Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Type</th><th>Example</th><th>Description</th></tr>
+<tr><td><code>{id}</code></td><td>string</td><td><code>v_1766985747930_q4x1fvgxzde</code></td><td>Vehicle ID</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "id": "v_1766985747930_q4x1fvgxzde",
+    "user_id": "42",
+    "name": "My Daily Driver",
+    "display_name": "2018 Honda Accord",
+    "vin": "1HGBH41JXMN109186",
+    "plate": "ABC1234",
+    "year": 2018,
+    "make": "Honda",
+    "model": "Accord",
+    "engine": "1.5L Turbo I4",
+    "body_class": "Sedan",
+    "odometer": 52392,
+    "photo_path": "/uploads/vehicles/honda_accord.jpg",
+    "insurance_expiry": "2026-06-15",
+    "registration_expiry": "2026-03-20"
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+
+<p class="ep-label">Error Response <span class="status-pill s404">404</span></p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Vehicle not found.",
+    "details": null
+  },
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- PUT /vehicles/{id}/odometer -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-put">PUT</span> /vehicles/{id}/odometer</h4>
+<p class="ep-desc">Update a vehicle's odometer reading. Cannot decrease. Max single jump: 10,000 miles.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">URL Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Type</th><th>Example</th></tr>
+<tr><td><code>{id}</code></td><td>string</td><td><code>v_1766985747930_q4x1fvgxzde</code></td></tr>
+</table>
+
+<p class="ep-label">Request Body</p>
+<pre>{
+  "odometer": 52500
+}</pre>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "vehicle_id": "v_1766985747930_q4x1fvgxzde",
+    "previous_odometer": 52392,
+    "new_odometer": 52500,
+    "increase": 108
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+
+<p class="ep-label">Error: Decrease <span class="status-pill s422">422</span></p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "ODOMETER_DECREASE",
+    "message": "New odometer (50000) cannot be less than current (52392).",
+    "details": null
+  },
+  "meta": { ... }
+}</pre>
+
+<p class="ep-label">Error: Jump Too Large <span class="status-pill s422">422</span></p>
+<pre>{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "ODOMETER_JUMP_TOO_LARGE",
+    "message": "Odometer increase of 15000 miles exceeds maximum allowed.",
+    "details": null
+  },
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /vehicles/{id}/reminders -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /vehicles/{id}/reminders</h4>
+<p class="ep-desc">Get all maintenance reminders for a specific vehicle.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": [
+    {
+      "id": "r_17669857_abc123",
+      "vehicle_id": "v_1766985747930_q4x1fvgxzde",
+      "vehicle_name": "My Daily Driver",
+      "service_name": "Oil Change",
+      "title": "Regular oil change",
+      "due_date": "2026-03-15",
+      "due_mileage": 55000,
+      "current_odometer": 52392,
+      "base_odo": 50000,
+      "base_date": "2025-09-15",
+      "is_recurring": true,
+      "interval_miles": 5000,
+      "interval_months": 6,
+      "notes": "Use synthetic 0W-20",
+      "created_at": "2025-09-15 10:00:00",
+      "updated_at": "2025-09-15 10:00:00"
+    }
+  ],
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /vehicles/{id}/reminders/due -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /vehicles/{id}/reminders/due</h4>
+<p class="ep-desc">Get due or overdue reminders for a specific vehicle. Includes urgency level.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Query Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Type</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>days</code></td><td>integer</td><td>30</td><td>Look-ahead window in days</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "vehicle_id": "v_1766985747930_q4x1fvgxzde",
+    "window_days": 30,
+    "count": 1,
+    "reminders": [
+      {
+        "id": "r_17669857_abc123",
+        "vehicle_id": "v_1766985747930_q4x1fvgxzde",
+        "vehicle_name": "My Daily Driver",
+        "service_name": "Tire Rotation",
+        "title": "Rotate tires",
+        "due_date": "2026-02-20",
+        "due_mileage": 53000,
+        "current_odometer": 52392,
+        "base_odo": 48000,
+        "base_date": "2025-08-20",
+        "is_recurring": true,
+        "interval_miles": 5000,
+        "interval_months": 6,
+        "notes": null,
+        "created_at": "2025-08-20 14:30:00",
+        "updated_at": "2025-08-20 14:30:00",
+        "is_overdue": false,
+        "urgency": "upcoming"
+      }
+    ]
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+<p class="ep-label">Urgency Levels</p>
+<table class="param-table">
+<tr><td><code>overdue</code></td><td>Past due date OR past due mileage</td></tr>
+<tr><td><code>urgent</code></td><td>Within 7 days or 500 miles</td></tr>
+<tr><td><code>upcoming</code></td><td>Within 30 days or 2,000 miles</td></tr>
+<tr><td><code>normal</code></td><td>Further out</td></tr>
+</table>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== REMINDERS ENDPOINTS ===== -->
+<h2 id="doc-reminders">&#128276; Reminders</h2>
+
+<!-- GET /reminders -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /reminders</h4>
+<p class="ep-desc">List all maintenance reminders across all user vehicles.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": [
+    {
+      "id": "r_17669857_abc123",
+      "vehicle_id": "v_1766985747930_q4x1fvgxzde",
+      "vehicle_name": "My Daily Driver",
+      "service_name": "Oil Change",
+      "title": "Regular oil change",
+      "due_date": "2026-03-15",
+      "due_mileage": 55000,
+      "current_odometer": 52392,
+      "base_odo": 50000,
+      "base_date": "2025-09-15",
+      "is_recurring": true,
+      "interval_miles": 5000,
+      "interval_months": 6,
+      "notes": "Use synthetic 0W-20",
+      "created_at": "2025-09-15 10:00:00",
+      "updated_at": "2025-09-15 10:00:00"
+    }
+  ],
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /reminders/due -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /reminders/due</h4>
+<p class="ep-desc">Get all due/overdue reminders across all vehicles. Includes urgency and overdue flag.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Query Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Type</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>days</code></td><td>integer</td><td>30</td><td>Look-ahead window in days</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "window_days": 30,
+    "total": 3,
+    "overdue_count": 1,
+    "reminders": [
+      {
+        "id": "r_17669857_def456",
+        "vehicle_id": "v_1766985812456_m8k2prnxw7h",
+        "vehicle_name": "Weekend Car",
+        "service_name": "Brake Inspection",
+        "title": "Check brake pads",
+        "due_date": "2026-01-10",
+        "due_mileage": null,
+        "current_odometer": 78900,
+        "base_odo": null,
+        "base_date": "2025-07-10",
+        "is_recurring": true,
+        "interval_miles": null,
+        "interval_months": 6,
+        "notes": null,
+        "created_at": "2025-07-10 09:00:00",
+        "updated_at": "2025-07-10 09:00:00",
+        "is_overdue": true,
+        "urgency": "overdue"
+      }
+    ]
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /reminders/{id} -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /reminders/{id}</h4>
+<p class="ep-desc">Get a single reminder by ID.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">URL Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Type</th><th>Example</th></tr>
+<tr><td><code>{id}</code></td><td>string</td><td><code>r_17669857_abc123</code></td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "id": "r_17669857_abc123",
+    "vehicle_id": "v_1766985747930_q4x1fvgxzde",
+    "vehicle_name": "My Daily Driver",
+    "service_name": "Oil Change",
+    "title": "Regular oil change",
+    "due_date": "2026-03-15",
+    "due_mileage": 55000,
+    "current_odometer": 52392,
+    "base_odo": 50000,
+    "base_date": "2025-09-15",
+    "is_recurring": true,
+    "interval_miles": 5000,
+    "interval_months": 6,
+    "notes": "Use synthetic 0W-20",
+    "created_at": "2025-09-15 10:00:00",
+    "updated_at": "2025-09-15 10:00:00"
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== SYNC ENDPOINTS ===== -->
+<h2 id="doc-sync">&#128259; Sync</h2>
+
+<!-- POST /sync/push -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-post">POST</span> /sync/push</h4>
+<p class="ep-desc">Batch update odometer readings for multiple vehicles. This is the primary sync endpoint used by the mobile app after trip tracking. Sends only odometer deltas &mdash; <strong>no GPS data</strong>.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Request Headers (Optional)</p>
+<pre>X-Device-Id: android_abc123</pre>
+
+<p class="ep-label">Request Body</p>
+<pre>{
+  "vehicles": [
+    {
+      "id": "v_1766985747930_q4x1fvgxzde",
+      "odometer": 52534
+    },
+    {
+      "id": "v_1766985812456_m8k2prnxw7h",
+      "odometer": 78920
+    }
+  ]
+}</pre>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "synced": 2,
+    "total": 2,
+    "miles": 162,
+    "results": [
+      {
+        "id": "v_1766985747930_q4x1fvgxzde",
+        "success": true,
+        "previous_odometer": 52392,
+        "new_odometer": 52534,
+        "increase": 142
+      },
+      {
+        "id": "v_1766985812456_m8k2prnxw7h",
+        "success": true,
+        "previous_odometer": 78900,
+        "new_odometer": 78920,
+        "increase": 20
+      }
+    ]
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+
+<p class="ep-label">Partial Success Response <span class="status-pill s207">207</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "synced": 1,
+    "total": 2,
+    "miles": 142,
+    "results": [
+      {
+        "id": "v_1766985747930_q4x1fvgxzde",
+        "success": true,
+        "previous_odometer": 52392,
+        "new_odometer": 52534,
+        "increase": 142
+      },
+      {
+        "id": "v_invalid_id",
+        "success": false,
+        "error": "Vehicle not found or not owned by user"
+      }
+    ]
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+<p><em>Note: Status 207 (Multi-Status) is returned when some vehicles succeed and some fail.</em></p>
+</div>
+
+<!-- GET /sync/status -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /sync/status</h4>
+<p class="ep-desc">Get sync history for the current user/device. Pass <code>X-Device-Id</code> header for device-specific stats.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "last_sync_push": "2026-02-10 14:30:00",
+    "last_sync_pull": null,
+    "vehicles_synced": 15,
+    "total_miles_synced": 1247.50,
+    "sync_count": 8,
+    "last_error": null
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+<p><em>Note: Returns zeroed values if no sync history exists yet.</em></p>
+</div>
+
+<!-- POST /sync/register-device -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-post">POST</span> /sync/register-device</h4>
+<p class="ep-desc">Register a mobile device for push notifications and sync tracking.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Request Body</p>
+<pre>{
+  "device_id": "android_abc123",
+  "platform": "android",
+  "device_name": "Pixel 8 Pro",
+  "device_model": "Pixel 8 Pro",
+  "os_version": "15",
+  "app_version": "1.0.0",
+  "push_token": "fcm:dRz8x9Yk2T..."
+}</pre>
+<table class="param-table">
+<tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>device_id</code></td><td>string</td><td>Yes</td><td>Unique device identifier</td></tr>
+<tr><td><code>platform</code></td><td>string</td><td>Yes</td><td><code>android</code> or <code>ios</code></td></tr>
+<tr><td><code>device_name</code></td><td>string</td><td>No</td><td>Friendly name</td></tr>
+<tr><td><code>push_token</code></td><td>string</td><td>No</td><td>FCM/APNS push notification token</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s201">201</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "status": "registered",
+    "device_id": "android_abc123"
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== SUBSCRIPTION ===== -->
+<h2 id="doc-subscription">&#127941; Subscription</h2>
+
+<!-- GET /subscription/status -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /subscription/status</h4>
+<p class="ep-desc">Get the user's subscription level and feature flags. Use this to determine which features to enable in the mobile app.</p>
+<p class="ep-auth">&#128274; Requires Bearer token</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "subscription_level": "paid",
+    "features": {
+      "manual_sync": true,
+      "background_sync": true,
+      "auto_sync": true,
+      "trip_tracking": true,
+      "vehicle_management": true,
+      "odometer_adjustment": true,
+      "reminders": true
+    }
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+
+<p class="ep-label">Free User Response</p>
+<pre>{
+  "success": true,
+  "data": {
+    "subscription_level": "free",
+    "features": {
+      "manual_sync": true,
+      "background_sync": true,
+      "auto_sync": false,
+      "trip_tracking": true,
+      "vehicle_management": true,
+      "odometer_adjustment": true,
+      "reminders": true
+    }
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== ADMIN ENDPOINTS ===== -->
+<h2 id="doc-admin">&#128737; Admin</h2>
+<p>All admin endpoints require WordPress <strong>administrator</strong> role.</p>
+
+<!-- GET /admin/test -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /admin/test</h4>
+<p class="ep-desc">Verify admin access is working.</p>
+<p class="ep-auth">&#128274; Requires Bearer token + Admin role</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "message": "Admin API Tester active.",
+    "admin_user": {
+      "user_id": 1,
+      "username": "admin",
+      "email": "admin@trackmywrench.com"
+    }
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<!-- GET /admin/users -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /admin/users</h4>
+<p class="ep-desc">List all users with subscription info. Paginated.</p>
+<p class="ep-auth">&#128274; Requires Bearer token + Admin role</p>
+
+<p class="ep-label">Query Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>page</code></td><td>1</td><td>Page number</td></tr>
+<tr><td><code>per_page</code></td><td>50</td><td>Results per page (max 100)</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "username": "admin",
+      "email": "admin@trackmywrench.com",
+      "display_name": "Admin",
+      "subscription_level": "paid"
+    }
+  ],
+  "error": null,
+  "meta": {
+    "api_version": "1.0.0",
+    "timestamp": 1739404800,
+    "pagination": {
+      "total": 25,
+      "page": 1,
+      "per_page": 50,
+      "total_pages": 1,
+      "has_more": false
+    }
+  }
+}</pre>
+</div>
+
+<!-- GET /admin/logs -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /admin/logs</h4>
+<p class="ep-desc">View API request logs. Paginated with filters.</p>
+<p class="ep-auth">&#128274; Requires Bearer token + Admin role</p>
+
+<p class="ep-label">Query Parameters</p>
+<table class="param-table">
+<tr><th>Param</th><th>Description</th></tr>
+<tr><td><code>user_id</code></td><td>Filter by user ID</td></tr>
+<tr><td><code>endpoint</code></td><td>Filter by endpoint path (partial match)</td></tr>
+<tr><td><code>status_code</code></td><td>Filter by HTTP status code</td></tr>
+<tr><td><code>method</code></td><td>Filter by HTTP method</td></tr>
+<tr><td><code>page</code></td><td>Page number (default 1)</td></tr>
+<tr><td><code>per_page</code></td><td>Results per page (max 200, default 50)</td></tr>
+</table>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "user_id": 42,
+      "method": "GET",
+      "endpoint": "/vehicles",
+      "status_code": 200,
+      "response_time_ms": 45,
+      "ip_address": "192.168.1.1",
+      "device_id": "android_abc123",
+      "error_message": null,
+      "created_at": "2026-02-12 14:30:00"
+    }
+  ],
+  "error": null,
+  "meta": {
+    "pagination": { "total": 150, "page": 1, "per_page": 50, "total_pages": 3, "has_more": true }
+  }
+}</pre>
+</div>
+
+<!-- GET /admin/stats -->
+<div class="endpoint-block">
+<h4><span class="doc-method doc-get">GET</span> /admin/stats</h4>
+<p class="ep-desc">API usage statistics: request counts, auth metrics, device counts, sync totals, top endpoints.</p>
+<p class="ep-auth">&#128274; Requires Bearer token + Admin role</p>
+
+<p class="ep-label">Success Response <span class="status-pill s200">200</span></p>
+<pre>{
+  "success": true,
+  "data": {
+    "requests": {
+      "total_24h": 342,
+      "total_7d": 2150,
+      "errors_24h": 12,
+      "avg_response_ms": 38.5
+    },
+    "auth": {
+      "active_tokens": 8,
+      "unique_users_24h": 5
+    },
+    "devices": {
+      "total_registered": 12,
+      "by_platform": [
+        { "platform": "android", "count": 10 },
+        { "platform": "ios", "count": 2 }
+      ]
+    },
+    "sync": {
+      "total_syncs": 45,
+      "total_miles": 3250.75
+    },
+    "top_endpoints_24h": [
+      { "endpoint": "/vehicles", "method": "GET", "count": 89, "avg_ms": 35.2 },
+      { "endpoint": "/reminders/due", "method": "GET", "count": 67, "avg_ms": 42.1 }
+    ]
+  },
+  "error": null,
+  "meta": { ... }
+}</pre>
+</div>
+
+<hr class="doc-divider">
+
+<!-- ===== MOBILE INTEGRATION GUIDE ===== -->
+<h2 id="doc-mobile">&#128241; Mobile Integration Guide</h2>
+
+<h3>Android (Kotlin) &mdash; Login Flow</h3>
 <pre>// Option A: Direct Login
 val response = api.login(LoginRequest(
     username = "user@example.com",
@@ -254,48 +1181,66 @@ sessionManager.saveTokens(...)</pre>
             val newTokens = api.refresh(
                 sessionManager.refreshToken)
             sessionManager.saveTokens(newTokens)
-            // Retry original request
+            // Retry original request with new token
         }
         return response
     }
 }</pre>
 
-<h3>Sync Push</h3>
+<h3>Sync Push (After Trip Tracking)</h3>
 <pre>// After trips complete, batch update odometers
 val syncPayload = SyncPushRequest(
     vehicles = pendingVehicles.map {
-        VehicleUpdate(id = it.id,
+        VehicleUpdate(
+            id = it.id, // String ID!
             odometer = it.adjustedOdometer
-                ?: it.calculatedOdometer)
+                ?: it.calculatedOdometer
+        )
     }
 )
 val result = api.syncPush(syncPayload)
-// Mark successful vehicles as synced</pre>
+// Mark successful vehicles as synced
+result.results
+    .filter { it.success }
+    .forEach { markVehicleSynced(it.id) }</pre>
 
 <h3>Privacy</h3>
 <p>GPS data <strong>never leaves the device</strong>. Only odometer deltas are synced. The mobile app calculates distance locally using GPS, then sends only the final odometer number per vehicle.</p>
 
-<hr style="border-color:var(--border);margin:20px 0">
+<hr class="doc-divider">
 
-<h2>Security</h2>
+<h2 id="doc-security">&#128272; Security</h2>
 <p><strong>TLS:</strong> All traffic enforced HTTPS via .htaccess.</p>
-<p><strong>JWT:</strong> HMAC-SHA256 signed. Access tokens: 30 min. Refresh tokens: 30 days, rotated on use, stored as SHA-256 hash.</p>
+<p><strong>JWT:</strong> HMAC-SHA256. Access: 30 min. Refresh: 30 days, rotated on use, stored as SHA-256 hash.</p>
 <p><strong>Rate Limiting:</strong> Database-backed sliding window per IP and per user.</p>
-<p><strong>Certificate Pinning:</strong> Recommended for mobile apps (see Blueprint).</p>
+<p><strong>Certificate Pinning:</strong> Recommended for mobile apps.</p>
 <p><strong>Input Validation:</strong> All inputs sanitized. SQL injection prevented via PDO prepared statements.</p>
 <p><strong>CORS:</strong> Restricted to <code>trackmywrench.com</code>. Mobile apps (no Origin header) pass through.</p>
 
-<hr style="border-color:var(--border);margin:20px 0">
+<hr class="doc-divider">
 
-<h2>Database Tables (API-specific)</h2>
-<p>These tables are <strong>new</strong> and do not touch existing GarageMinder tables:</p>
-<p><code>api_refresh_tokens</code> &mdash; JWT refresh token storage with device info.</p>
-<p><code>api_rate_limits</code> &mdash; Request throttling counters.</p>
-<p><code>api_devices</code> &mdash; Registered mobile devices.</p>
-<p><code>api_request_log</code> &mdash; Audit trail.</p>
-<p><code>api_user_preferences</code> &mdash; Mobile app settings.</p>
-<p><code>api_sync_status</code> &mdash; Sync tracking per user/device.</p>
-<p>Existing tables read (not modified): <code>wp_users</code>, <code>wp_usermeta</code>, <code>wp_swpm_members_tbl</code>, <code>wp_swpm_membership_tbl</code>, <code>gm_vehicles</code>, <code>gm_reminders</code>.</p>
+<h2 id="doc-db">&#128451; Database Tables</h2>
+<p>API-specific tables (new, do not touch existing GarageMinder tables):</p>
+<table class="doc-table">
+<tr><td><code>api_refresh_tokens</code></td><td>JWT refresh token storage with device info</td></tr>
+<tr><td><code>api_rate_limits</code></td><td>Request throttling counters</td></tr>
+<tr><td><code>api_devices</code></td><td>Registered mobile devices</td></tr>
+<tr><td><code>api_request_log</code></td><td>Audit trail of all API requests</td></tr>
+<tr><td><code>api_user_preferences</code></td><td>Mobile app settings (key-value)</td></tr>
+<tr><td><code>api_sync_status</code></td><td>Sync tracking per user/device</td></tr>
+</table>
+<p>Existing GarageMinder tables read by API (not modified except <code>vehicles.current_odo</code> on sync push):</p>
+<table class="doc-table">
+<tr><td><code>vehicles</code></td><td>Vehicle data (<code>current_odo</code> updated on sync)</td></tr>
+<tr><td><code>reminders</code></td><td>Maintenance reminders (read-only)</td></tr>
+</table>
+<p>WordPress tables read (never modified):</p>
+<table class="doc-table">
+<tr><td><code>wp_users</code></td><td>Authentication &amp; user profiles</td></tr>
+<tr><td><code>wp_usermeta</code></td><td>Roles &amp; capabilities</td></tr>
+<tr><td><code>wp_swpm_members_tbl</code></td><td>Subscription membership info</td></tr>
+<tr><td><code>wp_swpm_membership_tbl</code></td><td>Subscription level definitions</td></tr>
+</table>
 
                 </div>
             </div>

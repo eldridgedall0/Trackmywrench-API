@@ -24,18 +24,18 @@ const ENDPOINTS = [
     ]},
     { group: 'Vehicles', items: [
         { method: 'GET', path: '/vehicles', auth: true },
-        { method: 'GET', path: '/vehicles/{id}', auth: true, params: { id: '1' }},
-        { method: 'PUT', path: '/vehicles/{id}/odometer', auth: true, params: { id: '1' }, body: { odometer: 0 }},
-        { method: 'GET', path: '/vehicles/{id}/reminders', auth: true, params: { id: '1' }},
-        { method: 'GET', path: '/vehicles/{id}/reminders/due', auth: true, params: { id: '1' }},
+        { method: 'GET', path: '/vehicles/{id}', auth: true, params: { id: 'VEHICLE_ID' }},
+        { method: 'PUT', path: '/vehicles/{id}/odometer', auth: true, params: { id: 'VEHICLE_ID' }, body: { odometer: 0 }},
+        { method: 'GET', path: '/vehicles/{id}/reminders', auth: true, params: { id: 'VEHICLE_ID' }},
+        { method: 'GET', path: '/vehicles/{id}/reminders/due', auth: true, params: { id: 'VEHICLE_ID' }},
     ]},
     { group: 'Reminders', items: [
         { method: 'GET', path: '/reminders', auth: true },
         { method: 'GET', path: '/reminders/due', auth: true },
-        { method: 'GET', path: '/reminders/{id}', auth: true, params: { id: '1' }},
+        { method: 'GET', path: '/reminders/{id}', auth: true, params: { id: 'REMINDER_ID' }},
     ]},
     { group: 'Sync', items: [
-        { method: 'POST', path: '/sync/push', auth: true, body: { vehicles: [{ id: 1, odometer: 0 }] }},
+        { method: 'POST', path: '/sync/push', auth: true, body: { vehicles: [{ id: "VEHICLE_ID", odometer: 0 }] }},
         { method: 'GET',  path: '/sync/status', auth: true },
         { method: 'POST', path: '/sync/register-device', auth: true, body: { device_id: 'test-001', platform: 'android', device_name: 'Test Device' }},
     ]},
@@ -53,10 +53,12 @@ const ENDPOINTS = [
 let selectedEndpoint = null;
 let activeTab = 'body';
 let activeRightTab = 'response';
+let cachedVehicleId = null;
+let cachedReminderId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     if (accessToken) {
-        verifyToken().then(valid => valid ? showApp() : showLogin());
+        verifyToken().then(valid => { if (valid) { showApp(); fetchSampleIds(); } else showLogin(); });
     } else {
         showLogin();
     }
@@ -93,6 +95,7 @@ async function handleLogin() {
             localStorage.setItem('gm_admin_token', accessToken);
             localStorage.setItem('gm_admin_refresh', refreshToken);
             showApp();
+            fetchSampleIds();
         } else { errEl.textContent = data.error?.message || 'Login failed'; }
     } catch (e) { errEl.textContent = 'Connection error: ' + e.message; }
 }
@@ -232,6 +235,44 @@ function showRightTab(tab) {
     activeRightTab = tab;
     document.querySelectorAll('.right-tab').forEach(el => el.classList.remove('active'));
     document.querySelector('[data-right-tab="' + tab + '"]')?.classList.add('active');
-    document.getElementById('response-content').style.display = tab === 'response' ? 'block' : 'none';
+    document.getElementById('response-content').style.display = tab === 'response' ? 'flex' : 'none';
     document.getElementById('docs-content').style.display = tab === 'docs' ? 'block' : 'none';
+}
+
+// === Auto-fill sample IDs ===
+async function fetchSampleIds() {
+    try {
+        const res = await fetch(API_BASE + '/vehicles', { headers: { 'Authorization': 'Bearer ' + accessToken }});
+        const data = await res.json();
+        if (data.success && data.data && data.data.length > 0) {
+            cachedVehicleId = data.data[0].id;
+            // Update ENDPOINTS in place
+            ENDPOINTS.forEach(group => {
+                group.items.forEach(ep => {
+                    if (ep.params && ep.params.id === 'VEHICLE_ID') {
+                        ep.params.id = cachedVehicleId;
+                    }
+                    // Fix sync push body too
+                    if (ep.body && ep.body.vehicles) {
+                        ep.body.vehicles = [{ id: cachedVehicleId, odometer: data.data[0].odometer || 0 }];
+                    }
+                });
+            });
+        }
+    } catch (e) { /* Silently fail - user can enter IDs manually */ }
+
+    try {
+        const res = await fetch(API_BASE + '/reminders', { headers: { 'Authorization': 'Bearer ' + accessToken }});
+        const data = await res.json();
+        if (data.success && data.data && data.data.length > 0) {
+            cachedReminderId = data.data[0].id;
+            ENDPOINTS.forEach(group => {
+                group.items.forEach(ep => {
+                    if (ep.params && ep.params.id === 'REMINDER_ID') {
+                        ep.params.id = cachedReminderId;
+                    }
+                });
+            });
+        }
+    } catch (e) { /* Silently fail */ }
 }
