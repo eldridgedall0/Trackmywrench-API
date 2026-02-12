@@ -301,6 +301,15 @@ function parse_db_credentials(string $file_path, string $label = 'config'): arra
         $db['pass'] = '';
     }
     
+    // Handle host:port format (e.g. "localhost:3306")
+    // PDO needs host and port separate in DSN
+    $db['port'] = null;
+    if (isset($db['host']) && strpos($db['host'], ':') !== false) {
+        $parts = explode(':', $db['host'], 2);
+        $db['host'] = $parts[0];
+        $db['port'] = (int) $parts[1];
+    }
+    
     return $db;
 }
 

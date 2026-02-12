@@ -31,6 +31,9 @@ class Database
         }
 
         $dsn = "mysql:host={$config['host']};dbname={$config['name']};charset=utf8mb4";
+        if (!empty($config['port'])) {
+            $dsn = "mysql:host={$config['host']};port={$config['port']};dbname={$config['name']};charset=utf8mb4";
+        }
 
         $options = [
             \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
