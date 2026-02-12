@@ -2,7 +2,7 @@
 namespace GarageMinder\API\Endpoints\Vehicles;
 
 use GarageMinder\API\Endpoints\BaseEndpoint;
-use GarageMinder\API\Core\{Request, Response};
+use GarageMinder\API\Core\{Request, Response, Database};
 use GarageMinder\API\Models\Reminder;
 
 class RemindersEndpoint extends BaseEndpoint
@@ -10,7 +10,7 @@ class RemindersEndpoint extends BaseEndpoint
     public function handle(Request $request): void
     {
         $userId = $request->getAuthenticatedUserId();
-        $vehicleId = (int) $request->getRouteParam('id');
+        $vehicleId = $request->getRouteParam('id'); // String ID
 
         $reminderModel = new Reminder();
         $reminders = $reminderModel->getByVehicle($vehicleId, $userId);
@@ -23,12 +23,13 @@ class RemindersEndpoint extends BaseEndpoint
         Response::success($reminders);
     }
 
-    private function vehicleExists(int $vehicleId, int $userId): bool
+    private function vehicleExists(string $vehicleId, int $userId): bool
     {
-        $db = \GarageMinder\API\Core\Database::getInstance();
-        return (bool) $db->fetchOne(
+        $db = Database::getInstance();
+        $result = $db->fetchOne(
             "SELECT id FROM vehicles WHERE id = ? AND user_id = ?",
             [$vehicleId, $userId]
         );
+        return $result !== null;
     }
 }

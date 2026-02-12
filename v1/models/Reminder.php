@@ -32,8 +32,9 @@ class Reminder
 
     /**
      * Get reminders for a specific vehicle
+     * Vehicle IDs are strings (e.g. "v_1766985747930_q4x1fvgxzde")
      */
-    public function getByVehicle(int $vehicleId, int $userId): array
+    public function getByVehicle(string $vehicleId, int $userId): array
     {
         // Verify ownership
         $vehicle = $this->db->fetchOne(
@@ -113,7 +114,7 @@ class Reminder
     /**
      * Get due/overdue reminders for a specific vehicle
      */
-    public function getDueByVehicle(int $vehicleId, int $userId, int $windowDays = null): array
+    public function getDueByVehicle(string $vehicleId, int $userId, int $windowDays = null): array
     {
         $windowDays = $windowDays ?? REMINDERS_DUE_WINDOW_DAYS;
         $futureDate = date('Y-m-d', strtotime("+{$windowDays} days"));
@@ -155,7 +156,7 @@ class Reminder
     {
         return [
             'id'              => (int) $r['id'],
-            'vehicle_id'      => (int) $r['vehicle_id'],
+            'vehicle_id'      => $r['vehicle_id'],  // String ID
             'vehicle_name'    => trim(($r['year'] ?? '') . ' ' . $r['make'] . ' ' . $r['model']),
             'service_type'    => $r['service_type'] ?? null,
             'description'     => $r['description'] ?? null,

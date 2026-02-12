@@ -30,8 +30,9 @@ class Vehicle
 
     /**
      * Get a single vehicle by ID (with user ownership check)
+     * Vehicle IDs are strings (e.g. "v_1766985747930_q4x1fvgxzde")
      */
-    public function getById(int $vehicleId, int $userId): ?array
+    public function getById(string $vehicleId, int $userId): ?array
     {
         $vehicle = $this->db->fetchOne(
             "SELECT id, user_id, vin, year, make, model, trim,
@@ -47,12 +48,11 @@ class Vehicle
     /**
      * Update vehicle odometer
      */
-    public function updateOdometer(int $vehicleId, int $userId, int $newOdometer): bool
+    public function updateOdometer(string $vehicleId, int $userId, int $newOdometer): bool
     {
         $vehicle = $this->getById($vehicleId, $userId);
         if (!$vehicle) return false;
 
-        // Sanity check: odometer should not decrease
         if ($newOdometer < $vehicle['odometer']) {
             return false;
         }
@@ -76,10 +76,10 @@ class Vehicle
 
         try {
             foreach ($updates as $update) {
-                $vehicleId = (int) ($update['id'] ?? 0);
+                $vehicleId = $update['id'] ?? '';
                 $newOdometer = (int) ($update['odometer'] ?? 0);
 
-                if ($vehicleId <= 0 || $newOdometer <= 0) {
+                if (empty($vehicleId) || $newOdometer <= 0) {
                     $results[] = [
                         'id' => $vehicleId,
                         'success' => false,
@@ -146,7 +146,7 @@ class Vehicle
     private function formatVehicle(array $vehicle): array
     {
         return [
-            'id'          => (int) $vehicle['id'],
+            'id'          => $vehicle['id'],  // String ID
             'user_id'     => (int) $vehicle['user_id'],
             'vin'         => $vehicle['vin'],
             'year'        => $vehicle['year'] ? (int) $vehicle['year'] : null,

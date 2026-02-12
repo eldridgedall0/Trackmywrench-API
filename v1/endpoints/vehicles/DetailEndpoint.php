@@ -10,7 +10,7 @@ class DetailEndpoint extends BaseEndpoint
     public function handle(Request $request): void
     {
         $userId = $request->getAuthenticatedUserId();
-        $vehicleId = (int) $request->getRouteParam('id');
+        $vehicleId = $request->getRouteParam('id'); // String ID
 
         $vehicleModel = new Vehicle();
         $vehicle = $vehicleModel->getById($vehicleId, $userId);

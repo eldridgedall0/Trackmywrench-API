@@ -10,7 +10,7 @@ class OdometerEndpoint extends BaseEndpoint
     public function handle(Request $request): void
     {
         $userId = $request->getAuthenticatedUserId();
-        $vehicleId = (int) $request->getRouteParam('id');
+        $vehicleId = $request->getRouteParam('id'); // String ID
         $newOdometer = (int) $request->getBody('odometer');
 
         $v = new Validator();
