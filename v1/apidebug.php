@@ -1,7 +1,7 @@
 <?php
 /**
- * GarageMinder API - FULL Dispatch Test
- * Tests the ENTIRE index.php flow including route registration and dispatch.
+ * GarageMinder API - Dispatch Debugger
+ * Simulates a real API request through the middleware chain.
  * Upload to: gm/api/v1/apidebug.php
  * DELETE after debugging!
  */
@@ -13,174 +13,184 @@ error_reporting(E_ALL);
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        if (!headers_sent()) header('Content-Type: application/json');
+        if (!headers_sent()) header('Content-Type: text/plain');
         echo "\n\n=== FATAL ERROR ===\n";
-        echo json_encode($error, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        echo "Type: {$error['type']}\n";
+        echo "Message: {$error['message']}\n";
+        echo "File: {$error['file']}\n";
+        echo "Line: {$error['line']}\n";
     }
 });
 
-header('Content-Type: application/json; charset=utf-8');
+header('Content-Type: text/plain; charset=utf-8');
 
-$log = [];
-function s(string $msg) { global $log; $log[] = $msg; }
+echo "=== GarageMinder API Dispatch Debugger ===\n\n";
 
-// ============================================================
-// Replicate index.php EXACTLY
-// ============================================================
-
-// Step 1: Constants
-if (!defined('GM_API')) define('GM_API', true);
-if (!defined('GM_API_START')) define('GM_API_START', microtime(true));
-s('✅ Constants');
-
-// Step 2: Config
+// Step 1: Load config
+echo "1. Loading config... ";
 try {
+    if (!defined('GM_API')) define('GM_API', true);
+    if (!defined('GM_API_START')) define('GM_API_START', microtime(true));
     require_once __DIR__ . '/config/api_config.php';
-    s('✅ Config loaded. API_PREFIX=' . API_PREFIX . ' API_DEBUG=' . (API_DEBUG ? 'true' : 'false'));
+    echo "OK (API_PREFIX=" . API_PREFIX . ")\n";
 } catch (Throwable $e) {
-    s('❌ Config: ' . $e->getMessage());
-    echo json_encode(['log' => $log], JSON_PRETTY_PRINT); exit;
+    echo "FAILED: " . $e->getMessage() . "\n"; exit;
 }
 
-// Step 3: Autoloader (same as index.php)
+// Step 2: Register autoloader
+echo "2. Registering autoloader... ";
 spl_autoload_register(function (string $class) {
     $prefix = 'GarageMinder\\API\\';
     $baseDir = __DIR__ . '/';
     if (strpos($class, $prefix) !== 0) return;
     $relativeClass = substr($class, strlen($prefix));
-    $map = [
-        'Core\\'       => 'core/',
-        'Middleware\\' => 'middleware/',
-        'Models\\'     => 'models/',
-        'Endpoints\\' => 'endpoints/',
-    ];
+    $map = ['Core\\' => 'core/', 'Middleware\\' => 'middleware/', 'Models\\' => 'models/', 'Endpoints\\' => 'endpoints/'];
     foreach ($map as $nsPrefix => $dir) {
         if (strpos($relativeClass, $nsPrefix) === 0) {
             $classPath = substr($relativeClass, strlen($nsPrefix));
             $file = $baseDir . $dir . str_replace('\\', '/', $classPath) . '.php';
             if (file_exists($file)) { require_once $file; return; }
             $parts = explode('\\', $classPath);
-            if (count($parts) > 1) {
-                $parts[0] = strtolower($parts[0]);
-                $file = $baseDir . $dir . implode('/', $parts) . '.php';
-                if (file_exists($file)) { require_once $file; return; }
-            }
+            if (count($parts) > 1) { $parts[0] = strtolower($parts[0]); $file = $baseDir . $dir . implode('/', $parts) . '.php'; if (file_exists($file)) { require_once $file; return; } }
         }
     }
-    $file = $baseDir . 'endpoints/' . str_replace('\\', '/', $relativeClass) . '.php';
-    if (file_exists($file)) { require_once $file; }
 });
-s('✅ Autoloader');
+echo "OK\n";
 
-// Step 4: Use statements (same as index.php)
+// Step 3: Test middleware chain manually (same order as real dispatch)
+echo "\n=== Testing middleware chain for POST /auth/login ===\n\n";
+
+// 3a: CorsMiddleware
+echo "3a. CorsMiddleware... ";
 try {
-    // These are the exact use statements from index.php
-    use GarageMinder\API\Core\{Router, Request, Response};
-    use GarageMinder\API\Middleware\{CorsMiddleware, RateLimitMiddleware, AuthMiddleware, AdminMiddleware, LoggingMiddleware};
-    use GarageMinder\API\Endpoints\Auth\{LoginEndpoint, TokenExchangeEndpoint, RefreshEndpoint, LogoutEndpoint, VerifyEndpoint};
-    use GarageMinder\API\Endpoints\User\{ProfileEndpoint, PreferencesEndpoint};
-    use GarageMinder\API\Endpoints\Vehicles\{ListEndpoint as VehicleListEndpoint, DetailEndpoint as VehicleDetailEndpoint, OdometerEndpoint};
-    use GarageMinder\API\Endpoints\Vehicles\{RemindersEndpoint as VehicleRemindersEndpoint, RemindersDueEndpoint as VehicleRemindersDueEndpoint};
-    use GarageMinder\API\Endpoints\Reminders\{ListEndpoint as ReminderListEndpoint, DueEndpoint as ReminderDueEndpoint, DetailEndpoint as ReminderDetailEndpoint};
-    use GarageMinder\API\Endpoints\Sync\{PushEndpoint, StatusEndpoint as SyncStatusEndpoint, DeviceEndpoint};
-    use GarageMinder\API\Endpoints\Subscription\{StatusEndpoint as SubscriptionStatusEndpoint};
-    use GarageMinder\API\Endpoints\Admin\{TestEndpoint, UsersEndpoint, LogsEndpoint, StatsEndpoint};
-    s('✅ Use statements');
+    $cors = new \GarageMinder\API\Middleware\CorsMiddleware();
+    echo "OK (instantiated)\n";
 } catch (Throwable $e) {
-    s('❌ Use statements: ' . $e->getMessage());
-    echo json_encode(['log' => $log, 'error' => $e->getMessage()], JSON_PRETTY_PRINT); exit;
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
 }
 
-// Step 5: Build Router (same as index.php)
+// 3b: LoggingMiddleware (creates Logger → connects to GM DB)
+echo "3b. LoggingMiddleware... ";
 try {
-    $router = new Router();
-    $request = new Request();
-    s('✅ Router + Request created');
-    s('ℹ️ Request: ' . $request->getMethod() . ' ' . $request->getPath());
-    s('ℹ️ URI: ' . ($_SERVER['REQUEST_URI'] ?? 'none'));
-    s('ℹ️ SCRIPT_NAME: ' . ($_SERVER['SCRIPT_NAME'] ?? 'none'));
+    $logging = new \GarageMinder\API\Middleware\LoggingMiddleware();
+    echo "OK (instantiated)\n";
 } catch (Throwable $e) {
-    s('❌ Router/Request: ' . $e->getMessage());
-    echo json_encode(['log' => $log, 'error' => ['msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]], JSON_PRETTY_PRINT); exit;
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
 }
 
-// Step 6: Register global middleware
+// 3c: Logger (connects to DB on construct)
+echo "3c. Logger direct test... ";
 try {
-    $router->use(CorsMiddleware::class);
-    $router->use(LoggingMiddleware::class);
-    s('✅ Global middleware registered');
+    $logger = new \GarageMinder\API\Core\Logger();
+    echo "OK\n";
 } catch (Throwable $e) {
-    s('❌ Global middleware: ' . $e->getMessage());
-    echo json_encode(['log' => $log, 'error' => ['msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]], JSON_PRETTY_PRINT); exit;
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
 }
 
-// Step 7: Register ALL routes (same as index.php)
+// 3d: RateLimitMiddleware
+echo "3d. RateLimitMiddleware... ";
 try {
-    // Public routes
-    $router->group('', [RateLimitMiddleware::class], function (Router $r) {
-        $r->post('/auth/login',          LoginEndpoint::class);
-        $r->post('/auth/token-exchange', TokenExchangeEndpoint::class);
-        $r->post('/auth/refresh',        RefreshEndpoint::class);
+    $rateLimit = new \GarageMinder\API\Middleware\RateLimitMiddleware();
+    echo "OK (instantiated)\n";
+} catch (Throwable $e) {
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
+}
+
+// 3e: RateLimiter (connects to DB on construct)
+echo "3e. RateLimiter direct test... ";
+try {
+    $rateLimiter = new \GarageMinder\API\Core\RateLimiter();
+    echo "OK\n";
+    
+    // Actually run a rate limit check
+    echo "3f. RateLimiter check... ";
+    $result = $rateLimiter->check('127.0.0.1-debug', 'ip', '/auth/login');
+    echo "OK (allowed=" . ($result['allowed'] ? 'true' : 'false') . ", remaining={$result['remaining']})\n";
+} catch (Throwable $e) {
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
+}
+
+// Step 4: Test Request object
+echo "\n4. Request object... ";
+try {
+    $request = new \GarageMinder\API\Core\Request();
+    echo "OK (method=" . $request->getMethod() . ", path=" . $request->getPath() . ")\n";
+    echo "   URI: " . ($_SERVER['REQUEST_URI'] ?? 'none') . "\n";
+    echo "   SCRIPT_NAME: " . ($_SERVER['SCRIPT_NAME'] ?? 'none') . "\n";
+} catch (Throwable $e) {
+    echo "FAILED: " . $e->getMessage() . "\n";
+}
+
+// Step 5: Test Router setup
+echo "\n5. Router setup... ";
+try {
+    $router = new \GarageMinder\API\Core\Router();
+    
+    // Register just the login route
+    $router->use(\GarageMinder\API\Middleware\CorsMiddleware::class);
+    $router->use(\GarageMinder\API\Middleware\LoggingMiddleware::class);
+    
+    $router->group('', [\GarageMinder\API\Middleware\RateLimitMiddleware::class], function ($r) {
+        $r->post('/auth/login', \GarageMinder\API\Endpoints\Auth\LoginEndpoint::class);
     });
-    s('✅ Public routes registered');
-
-    // Authenticated routes
-    $router->group('', [RateLimitMiddleware::class, AuthMiddleware::class], function (Router $r) {
-        $r->post('/auth/logout',  LogoutEndpoint::class);
-        $r->get('/auth/verify',   VerifyEndpoint::class);
-        $r->get('/user/profile',       ProfileEndpoint::class);
-        $r->get('/user/preferences',   PreferencesEndpoint::class);
-        $r->put('/user/preferences',   PreferencesEndpoint::class);
-        $r->get('/vehicles',                       VehicleListEndpoint::class);
-        $r->get('/vehicles/{id}',                  VehicleDetailEndpoint::class);
-        $r->put('/vehicles/{id}/odometer',         OdometerEndpoint::class);
-        $r->get('/vehicles/{id}/reminders',        VehicleRemindersEndpoint::class);
-        $r->get('/vehicles/{id}/reminders/due',    VehicleRemindersDueEndpoint::class);
-        $r->get('/reminders',      ReminderListEndpoint::class);
-        $r->get('/reminders/due',  ReminderDueEndpoint::class);
-        $r->get('/reminders/{id}', ReminderDetailEndpoint::class);
-        $r->post('/sync/push',            PushEndpoint::class);
-        $r->get('/sync/status',           SyncStatusEndpoint::class);
-        $r->post('/sync/register-device', DeviceEndpoint::class);
-        $r->get('/subscription/status', SubscriptionStatusEndpoint::class);
-    });
-    s('✅ Authenticated routes registered');
-
-    // Admin routes
-    $router->group('/admin', [RateLimitMiddleware::class, AuthMiddleware::class, AdminMiddleware::class], function (Router $r) {
-        $r->get('/test',   TestEndpoint::class);
-        $r->post('/test',  TestEndpoint::class);
-        $r->get('/users',  UsersEndpoint::class);
-        $r->get('/logs',   LogsEndpoint::class);
-        $r->get('/stats',  StatsEndpoint::class);
-    });
-    s('✅ Admin routes registered');
-    s('ℹ️ Total routes: ' . count($router->getRoutes()));
+    
+    $routes = $router->getRoutes();
+    echo "OK (" . count($routes) . " routes)\n";
+    foreach ($routes as $route) {
+        echo "   {$route['method']} {$route['path']} → {$route['endpoint']}\n";
+    }
 } catch (Throwable $e) {
-    s('❌ Route registration: ' . $e->getMessage());
-    echo json_encode(['log' => $log, 'error' => ['msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine(), 'trace' => $e->getTraceAsString()]], JSON_PRETTY_PRINT); exit;
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
 }
 
-// Step 8: NOW dispatch (this is where the 500 likely happens)
-s('🔄 About to dispatch...');
-
-// Flush log so far in case dispatch causes a fatal
-echo "/* PRE-DISPATCH LOG: " . json_encode($log) . " */\n\n";
-flush();
-
+// Step 6: Database insert/execute test
+echo "\n6. Database method test... ";
 try {
-    $router->dispatch($request);
-    // If we get here, dispatch succeeded
+    $db = \GarageMinder\API\Core\Database::getInstance();
+    echo "getInstance OK\n";
+    
+    // Test fetchAll
+    echo "   fetchAll... ";
+    $tables = $db->fetchAll("SHOW TABLES");
+    echo "OK (" . count($tables) . " tables)\n";
+    
+    // Test fetchOne
+    echo "   fetchOne... ";
+    $one = $db->fetchOne("SELECT 1 as test");
+    echo "OK (test=" . ($one['test'] ?? 'null') . ")\n";
+    
+    // Test fetchColumn
+    echo "   fetchColumn... ";
+    $col = $db->fetchColumn("SELECT DATABASE()");
+    echo "OK (db=" . $col . ")\n";
+    
+    // Test insert (if method exists)
+    echo "   insert method exists... ";
+    if (method_exists($db, 'insert')) {
+        echo "YES\n";
+    } else {
+        echo "NO - this will cause failures in Logger and RateLimiter!\n";
+    }
+    
+    // Test execute (if method exists)
+    echo "   execute method exists... ";
+    if (method_exists($db, 'execute')) {
+        echo "YES\n";
+    } else {
+        echo "NO - this will cause failures in RateLimiter!\n";
+    }
+    
 } catch (Throwable $e) {
-    // Dispatch threw an exception
-    header('Content-Type: application/json');
-    echo json_encode([
-        'log' => $log,
-        'DISPATCH_ERROR' => [
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-            'trace' => explode("\n", $e->getTraceAsString()),
-        ]
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    echo "FAILED: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . "\n";
 }
+
+// Step 7: Check Database class has all needed methods
+echo "\n7. Database class methods:\n";
+$dbMethods = get_class_methods(\GarageMinder\API\Core\Database::class);
+foreach ($dbMethods as $m) {
+    echo "   - $m()\n";
+}
+
+echo "\n=== DONE ===\n";
+echo "If all steps passed, the 500 error is in the actual dispatch flow.\n";
+echo "Try the debuglogin.php page to test the full login independently.\n";
