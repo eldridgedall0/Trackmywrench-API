@@ -27,7 +27,7 @@ class RemindersEndpoint extends BaseEndpoint
     {
         $db = \GarageMinder\API\Core\Database::getInstance();
         return (bool) $db->fetchOne(
-            "SELECT id FROM gm_vehicles WHERE id = ? AND user_id = ?",
+            "SELECT id FROM vehicles WHERE id = ? AND user_id = ?",
             [$vehicleId, $userId]
         );
     }

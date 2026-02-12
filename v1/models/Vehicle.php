@@ -21,7 +21,7 @@ class Vehicle
             "SELECT id, user_id, vin, year, make, model, trim, 
                     odometer, is_active, notes, photo_path,
                     created_at, updated_at
-             FROM gm_vehicles WHERE user_id = ? ORDER BY is_active DESC, updated_at DESC",
+             FROM vehicles WHERE user_id = ? ORDER BY is_active DESC, updated_at DESC",
             [$userId]
         );
 
@@ -37,7 +37,7 @@ class Vehicle
             "SELECT id, user_id, vin, year, make, model, trim,
                     odometer, is_active, notes, photo_path,
                     created_at, updated_at
-             FROM gm_vehicles WHERE id = ? AND user_id = ?",
+             FROM vehicles WHERE id = ? AND user_id = ?",
             [$vehicleId, $userId]
         );
 
@@ -58,7 +58,7 @@ class Vehicle
         }
 
         $affected = $this->db->execute(
-            "UPDATE gm_vehicles SET odometer = ?, updated_at = NOW() WHERE id = ? AND user_id = ?",
+            "UPDATE vehicles SET odometer = ?, updated_at = NOW() WHERE id = ? AND user_id = ?",
             [$newOdometer, $vehicleId, $userId]
         );
 
@@ -118,7 +118,7 @@ class Vehicle
                 }
 
                 $db->execute(
-                    "UPDATE gm_vehicles SET odometer = ?, updated_at = NOW() WHERE id = ? AND user_id = ?",
+                    "UPDATE vehicles SET odometer = ?, updated_at = NOW() WHERE id = ? AND user_id = ?",
                     [$newOdometer, $vehicleId, $userId]
                 );
 

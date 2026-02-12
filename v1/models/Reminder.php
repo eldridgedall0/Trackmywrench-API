@@ -20,8 +20,8 @@ class Reminder
         $reminders = $this->db->fetchAll(
             "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
                     v.id as vehicle_id
-             FROM gm_reminders r
-             JOIN gm_vehicles v ON r.vehicle_id = v.id
+             FROM reminders r
+             JOIN vehicles v ON r.vehicle_id = v.id
              WHERE v.user_id = ?
              ORDER BY r.due_date ASC, r.due_mileage ASC",
             [$userId]
@@ -37,7 +37,7 @@ class Reminder
     {
         // Verify ownership
         $vehicle = $this->db->fetchOne(
-            "SELECT id FROM gm_vehicles WHERE id = ? AND user_id = ?",
+            "SELECT id FROM vehicles WHERE id = ? AND user_id = ?",
             [$vehicleId, $userId]
         );
 
@@ -46,8 +46,8 @@ class Reminder
         $reminders = $this->db->fetchAll(
             "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
                     v.id as vehicle_id
-             FROM gm_reminders r
-             JOIN gm_vehicles v ON r.vehicle_id = v.id
+             FROM reminders r
+             JOIN vehicles v ON r.vehicle_id = v.id
              WHERE r.vehicle_id = ?
              ORDER BY r.due_date ASC, r.due_mileage ASC",
             [$vehicleId]
@@ -64,8 +64,8 @@ class Reminder
         $reminder = $this->db->fetchOne(
             "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
                     v.id as vehicle_id
-             FROM gm_reminders r
-             JOIN gm_vehicles v ON r.vehicle_id = v.id
+             FROM reminders r
+             JOIN vehicles v ON r.vehicle_id = v.id
              WHERE r.id = ? AND v.user_id = ?",
             [$reminderId, $userId]
         );
@@ -85,8 +85,8 @@ class Reminder
         $reminders = $this->db->fetchAll(
             "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
                     v.id as vehicle_id
-             FROM gm_reminders r
-             JOIN gm_vehicles v ON r.vehicle_id = v.id
+             FROM reminders r
+             JOIN vehicles v ON r.vehicle_id = v.id
              WHERE v.user_id = ?
                AND (
                    (r.due_date IS NOT NULL AND r.due_date <= ?)
@@ -121,7 +121,7 @@ class Reminder
 
         // Verify ownership
         $vehicle = $this->db->fetchOne(
-            "SELECT id FROM gm_vehicles WHERE id = ? AND user_id = ?",
+            "SELECT id FROM vehicles WHERE id = ? AND user_id = ?",
             [$vehicleId, $userId]
         );
         if (!$vehicle) return [];
@@ -129,8 +129,8 @@ class Reminder
         $reminders = $this->db->fetchAll(
             "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
                     v.id as vehicle_id
-             FROM gm_reminders r
-             JOIN gm_vehicles v ON r.vehicle_id = v.id
+             FROM reminders r
+             JOIN vehicles v ON r.vehicle_id = v.id
              WHERE r.vehicle_id = ?
                AND (
                    (r.due_date IS NOT NULL AND r.due_date <= ?)
