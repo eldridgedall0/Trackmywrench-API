@@ -24,11 +24,12 @@ class AuthMiddleware extends Middleware
 
         $userId = (int) $payload['sub'];
 
-        // Fetch user data from WordPress users table
-        $db = Database::getInstance();
-        $user = $db->fetchOne(
+        // Fetch user data from WordPress users table (dynamic prefix)
+        $wpDb = Database::getWordPress();
+        $table = Database::wpTable('users');
+        $user = $wpDb->fetchOne(
             "SELECT ID, user_login, user_email, display_name 
-             FROM wp_users WHERE ID = ?",
+             FROM `{$table}` WHERE ID = ?",
             [$userId]
         );
 

@@ -326,3 +326,32 @@ function get_db_config(): array {
 function get_wp_db_config(): array {
     return parse_db_credentials(WP_CONFIG_PATH, 'WordPress wp-config.php');
 }
+
+/**
+ * Get WordPress table prefix from wp-config.php
+ * Extracts: $table_prefix = '89bPD7p_';
+ * Falls back to 'wp_' if not found
+ */
+function get_wp_table_prefix(): string {
+    static $prefix = null;
+    if ($prefix !== null) return $prefix;
+    
+    if (!defined('WP_CONFIG_PATH') || !file_exists(WP_CONFIG_PATH)) {
+        $prefix = 'wp_';
+        return $prefix;
+    }
+    
+    $contents = file_get_contents(WP_CONFIG_PATH);
+    
+    // Match: $table_prefix = '89bPD7p_';  or  $table_prefix  = "wp_";
+    if (preg_match('/\$table_prefix\s*=\s*[\'"]([^\'"]+)[\'"]/', $contents, $m)) {
+        $prefix = $m[1];
+    } else {
+        $prefix = 'wp_';
+    }
+    
+    return $prefix;
+}
+
+// Make prefix available globally as a constant
+define('WP_TABLE_PREFIX', get_wp_table_prefix());

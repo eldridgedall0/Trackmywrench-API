@@ -69,6 +69,16 @@ class Database
         return self::$wpInstance;
     }
 
+    /**
+     * Get WordPress table name with correct prefix
+     * Usage: Database::wpTable('users') returns '89bPD7p_users'
+     */
+    public static function wpTable(string $table): string
+    {
+        $prefix = defined('WP_TABLE_PREFIX') ? WP_TABLE_PREFIX : 'wp_';
+        return $prefix . $table;
+    }
+
     public function getPdo(): \PDO
     {
         return $this->pdo;

@@ -13,12 +13,14 @@ class AdminMiddleware extends Middleware
         }
 
         $userId = $request->getAuthenticatedUserId();
-        $db = Database::getInstance();
+        $wpDb = Database::getWordPress();
+        $table = Database::wpTable('usermeta');
+        $capKey = WP_TABLE_PREFIX . 'capabilities';
 
         // Check WordPress usermeta for administrator role
-        $meta = $db->fetchOne(
-            "SELECT meta_value FROM wp_usermeta WHERE user_id = ? AND meta_key = 'wp_capabilities'",
-            [$userId]
+        $meta = $wpDb->fetchOne(
+            "SELECT meta_value FROM `{$table}` WHERE user_id = ? AND meta_key = ?",
+            [$userId, $capKey]
         );
 
         if (!$meta) {
