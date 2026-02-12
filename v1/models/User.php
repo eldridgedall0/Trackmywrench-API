@@ -51,25 +51,42 @@ class User
     /**
      * Validate WordPress password hash
      * 
-     * Supports:
-     * - $P$ / $H$  → WordPress phpass (MD5-based, older installs)
-     * - $wp$2y$    → WordPress 6.x+ bcrypt with $wp$ namespace prefix
-     * - $2y$       → Standard bcrypt (manual resets, plugins)
-     * - $argon2id$ → PHP argon2 (rare but possible)
+     * Supports all WordPress password hash formats:
+     * - MD5 (32 chars)           → Legacy, hash_equals(md5(password), hash)
+     * - $P$ / $H$               → WordPress phpass (MD5-based, pre-6.8)
+     * - $wp$2y$ / $wp$2b$       → WordPress 6.8+ bcrypt with SHA-384 pre-hash
+     * - $2y$ / $2b$ / $argon2*  → Standard bcrypt/argon (plugins, manual resets)
      */
     public function verifyPassword(string $password, string $hash): bool
     {
-        // WordPress phpass (older hashing)
+        // Legacy MD5 (32-char hex hash, very old WordPress or manual DB entry)
+        if (strlen($hash) <= 32) {
+            return hash_equals($hash, md5($password));
+        }
+        
+        // Passwords longer than 4096 chars not supported (WordPress 6.8 check)
+        if (strlen($password) > 4096) {
+            return false;
+        }
+        
+        // WordPress 6.8+ bcrypt: "$wp$2y$10$..." 
+        // Password is pre-hashed: base64(HMAC-SHA384(password, "wp-sha384"))
+        // Then bcrypt of that pre-hash is stored with "$wp$" prefix
+        // To verify: pre-hash the input password the same way, then password_verify
+        // against the hash with "$wp" stripped (3 chars, keeping the leading "$")
+        if (strpos($hash, '$wp$') === 0) {
+            $passwordToVerify = base64_encode(
+                hash_hmac('sha384', $password, 'wp-sha384', true)
+            );
+            return password_verify($passwordToVerify, substr($hash, 3));
+        }
+        
+        // WordPress phpass ($P$ or $H$ prefix, pre-6.8 installs)
         if (strpos($hash, '$P$') === 0 || strpos($hash, '$H$') === 0) {
             return $this->checkPhpass($password, $hash);
         }
         
-        // WordPress 6.x+ wraps bcrypt with "$wp$" prefix
-        // e.g. "$wp$2y$10$salt..." → strip to "$2y$10$salt..."
-        if (strpos($hash, '$wp$') === 0) {
-            $hash = substr($hash, 3); // Remove "$wp" prefix, keeps "$2y$10$..."
-        }
-        
+        // Standard bcrypt ($2y$), argon2 ($argon2id$), or other password_hash formats
         return password_verify($password, $hash);
     }
 
