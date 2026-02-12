@@ -1,7 +1,7 @@
 <?php
 /**
- * GarageMinder API - Bootstrap Debugger
- * Replicates EXACTLY what index.php does, step by step.
+ * GarageMinder API - FULL Dispatch Test
+ * Tests the ENTIRE index.php flow including route registration and dispatch.
  * Upload to: gm/api/v1/apidebug.php
  * DELETE after debugging!
  */
@@ -14,35 +14,35 @@ register_shutdown_function(function() {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
         if (!headers_sent()) header('Content-Type: application/json');
-        echo json_encode(['FATAL_ERROR' => $error], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        echo "\n\n=== FATAL ERROR ===\n";
+        echo json_encode($error, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 });
 
 header('Content-Type: application/json; charset=utf-8');
+
 $log = [];
-$step = 0;
+function s(string $msg) { global $log; $log[] = $msg; }
 
-function s(string $msg, &$log, &$step) { $step++; $log[] = "Step {$step}: {$msg}"; }
-function fail(array $log, Throwable $e) {
-    echo json_encode(['steps' => $log, 'ERROR' => [
-        'message' => $e->getMessage(), 'file' => $e->getFile(),
-        'line' => $e->getLine(), 'trace' => explode("\n", $e->getTraceAsString()),
-    ]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    exit;
-}
+// ============================================================
+// Replicate index.php EXACTLY
+// ============================================================
 
-// === Step 1: Constants ===
+// Step 1: Constants
 if (!defined('GM_API')) define('GM_API', true);
 if (!defined('GM_API_START')) define('GM_API_START', microtime(true));
-s('✅ Constants defined', $log, $step);
+s('✅ Constants');
 
-// === Step 2: Config ===
+// Step 2: Config
 try {
     require_once __DIR__ . '/config/api_config.php';
-    s('✅ api_config.php loaded', $log, $step);
-} catch (Throwable $e) { s('❌ config failed', $log, $step); fail($log, $e); }
+    s('✅ Config loaded. API_PREFIX=' . API_PREFIX . ' API_DEBUG=' . (API_DEBUG ? 'true' : 'false'));
+} catch (Throwable $e) {
+    s('❌ Config: ' . $e->getMessage());
+    echo json_encode(['log' => $log], JSON_PRETTY_PRINT); exit;
+}
 
-// === Step 3: Register autoloader (EXACTLY as index.php does it) ===
+// Step 3: Autoloader (same as index.php)
 spl_autoload_register(function (string $class) {
     $prefix = 'GarageMinder\\API\\';
     $baseDir = __DIR__ . '/';
@@ -70,104 +70,117 @@ spl_autoload_register(function (string $class) {
     $file = $baseDir . 'endpoints/' . str_replace('\\', '/', $relativeClass) . '.php';
     if (file_exists($file)) { require_once $file; }
 });
-s('✅ Autoloader registered', $log, $step);
+s('✅ Autoloader');
 
-// === Step 4: Load every class that index.php uses ===
-$allClasses = [
-    // Core
-    'GarageMinder\\API\\Core\\Router',
-    'GarageMinder\\API\\Core\\Request',
-    'GarageMinder\\API\\Core\\Response',
-    'GarageMinder\\API\\Core\\Database',
-    'GarageMinder\\API\\Core\\JWTHandler',
-    'GarageMinder\\API\\Core\\Validator',
-    'GarageMinder\\API\\Core\\Logger',
-    'GarageMinder\\API\\Core\\RateLimiter',
-    'GarageMinder\\API\\Core\\Middleware',
-    // Middleware
-    'GarageMinder\\API\\Middleware\\CorsMiddleware',
-    'GarageMinder\\API\\Middleware\\RateLimitMiddleware',
-    'GarageMinder\\API\\Middleware\\AuthMiddleware',
-    'GarageMinder\\API\\Middleware\\AdminMiddleware',
-    'GarageMinder\\API\\Middleware\\LoggingMiddleware',
-    // Models
-    'GarageMinder\\API\\Models\\User',
-    'GarageMinder\\API\\Models\\Vehicle',
-    'GarageMinder\\API\\Models\\Token',
-    'GarageMinder\\API\\Models\\Device',
-    'GarageMinder\\API\\Models\\Reminder',
-    // Auth endpoints
-    'GarageMinder\\API\\Endpoints\\BaseEndpoint',
-    'GarageMinder\\API\\Endpoints\\Auth\\LoginEndpoint',
-    'GarageMinder\\API\\Endpoints\\Auth\\TokenExchangeEndpoint',
-    'GarageMinder\\API\\Endpoints\\Auth\\RefreshEndpoint',
-    'GarageMinder\\API\\Endpoints\\Auth\\LogoutEndpoint',
-    'GarageMinder\\API\\Endpoints\\Auth\\VerifyEndpoint',
-    // User endpoints
-    'GarageMinder\\API\\Endpoints\\User\\ProfileEndpoint',
-    'GarageMinder\\API\\Endpoints\\User\\PreferencesEndpoint',
-    // Vehicle endpoints
-    'GarageMinder\\API\\Endpoints\\Vehicles\\ListEndpoint',
-    'GarageMinder\\API\\Endpoints\\Vehicles\\DetailEndpoint',
-    'GarageMinder\\API\\Endpoints\\Vehicles\\OdometerEndpoint',
-    'GarageMinder\\API\\Endpoints\\Vehicles\\RemindersEndpoint',
-    'GarageMinder\\API\\Endpoints\\Vehicles\\RemindersDueEndpoint',
-    // Reminder endpoints
-    'GarageMinder\\API\\Endpoints\\Reminders\\ListEndpoint',
-    'GarageMinder\\API\\Endpoints\\Reminders\\DueEndpoint',
-    'GarageMinder\\API\\Endpoints\\Reminders\\DetailEndpoint',
-    // Sync endpoints
-    'GarageMinder\\API\\Endpoints\\Sync\\PushEndpoint',
-    'GarageMinder\\API\\Endpoints\\Sync\\StatusEndpoint',
-    'GarageMinder\\API\\Endpoints\\Sync\\DeviceEndpoint',
-    // Subscription
-    'GarageMinder\\API\\Endpoints\\Subscription\\StatusEndpoint',
-    // Admin
-    'GarageMinder\\API\\Endpoints\\Admin\\TestEndpoint',
-    'GarageMinder\\API\\Endpoints\\Admin\\UsersEndpoint',
-    'GarageMinder\\API\\Endpoints\\Admin\\LogsEndpoint',
-    'GarageMinder\\API\\Endpoints\\Admin\\StatsEndpoint',
-];
-
-$missing = [];
-foreach ($allClasses as $fqcn) {
-    try {
-        if (class_exists($fqcn, true)) {
-            s("✅ {$fqcn}", $log, $step);
-        } else {
-            s("❌ NOT FOUND: {$fqcn}", $log, $step);
-            
-            // Show what file the autoloader would look for
-            $rel = str_replace('GarageMinder\\API\\', '', $fqcn);
-            $parts = explode('\\', $rel);
-            // Lowercase first part (namespace dir)
-            $parts[0] = strtolower($parts[0]);
-            if (count($parts) > 2) $parts[1] = strtolower($parts[1]);
-            $expectedFile = __DIR__ . '/' . implode('/', $parts) . '.php';
-            $missing[] = ['class' => $fqcn, 'expected_file' => $expectedFile, 'file_exists' => file_exists($expectedFile)];
-        }
-    } catch (Throwable $e) {
-        s("❌ ERROR loading {$fqcn}: " . $e->getMessage(), $log, $step);
-        fail($log, $e);
-    }
-}
-
-// === Step 5: Try creating Router + Request ===
+// Step 4: Use statements (same as index.php)
 try {
-    $router = new \GarageMinder\API\Core\Router();
-    s('✅ Router created', $log, $step);
-    
-    $request = new \GarageMinder\API\Core\Request();
-    s('✅ Request created: ' . $request->getMethod() . ' ' . $request->getPath(), $log, $step);
+    // These are the exact use statements from index.php
+    use GarageMinder\API\Core\{Router, Request, Response};
+    use GarageMinder\API\Middleware\{CorsMiddleware, RateLimitMiddleware, AuthMiddleware, AdminMiddleware, LoggingMiddleware};
+    use GarageMinder\API\Endpoints\Auth\{LoginEndpoint, TokenExchangeEndpoint, RefreshEndpoint, LogoutEndpoint, VerifyEndpoint};
+    use GarageMinder\API\Endpoints\User\{ProfileEndpoint, PreferencesEndpoint};
+    use GarageMinder\API\Endpoints\Vehicles\{ListEndpoint as VehicleListEndpoint, DetailEndpoint as VehicleDetailEndpoint, OdometerEndpoint};
+    use GarageMinder\API\Endpoints\Vehicles\{RemindersEndpoint as VehicleRemindersEndpoint, RemindersDueEndpoint as VehicleRemindersDueEndpoint};
+    use GarageMinder\API\Endpoints\Reminders\{ListEndpoint as ReminderListEndpoint, DueEndpoint as ReminderDueEndpoint, DetailEndpoint as ReminderDetailEndpoint};
+    use GarageMinder\API\Endpoints\Sync\{PushEndpoint, StatusEndpoint as SyncStatusEndpoint, DeviceEndpoint};
+    use GarageMinder\API\Endpoints\Subscription\{StatusEndpoint as SubscriptionStatusEndpoint};
+    use GarageMinder\API\Endpoints\Admin\{TestEndpoint, UsersEndpoint, LogsEndpoint, StatsEndpoint};
+    s('✅ Use statements');
 } catch (Throwable $e) {
-    s('❌ Router/Request failed', $log, $step);
-    fail($log, $e);
+    s('❌ Use statements: ' . $e->getMessage());
+    echo json_encode(['log' => $log, 'error' => $e->getMessage()], JSON_PRETTY_PRINT); exit;
 }
 
-// === Summary ===
-echo json_encode([
-    'status' => empty($missing) ? '✅ ALL CLASSES LOADED - ready for dispatch' : '❌ MISSING CLASSES - see list',
-    'total_steps' => $step,
-    'missing_classes' => $missing,
-    'steps' => $log,
-], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+// Step 5: Build Router (same as index.php)
+try {
+    $router = new Router();
+    $request = new Request();
+    s('✅ Router + Request created');
+    s('ℹ️ Request: ' . $request->getMethod() . ' ' . $request->getPath());
+    s('ℹ️ URI: ' . ($_SERVER['REQUEST_URI'] ?? 'none'));
+    s('ℹ️ SCRIPT_NAME: ' . ($_SERVER['SCRIPT_NAME'] ?? 'none'));
+} catch (Throwable $e) {
+    s('❌ Router/Request: ' . $e->getMessage());
+    echo json_encode(['log' => $log, 'error' => ['msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]], JSON_PRETTY_PRINT); exit;
+}
+
+// Step 6: Register global middleware
+try {
+    $router->use(CorsMiddleware::class);
+    $router->use(LoggingMiddleware::class);
+    s('✅ Global middleware registered');
+} catch (Throwable $e) {
+    s('❌ Global middleware: ' . $e->getMessage());
+    echo json_encode(['log' => $log, 'error' => ['msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine()]], JSON_PRETTY_PRINT); exit;
+}
+
+// Step 7: Register ALL routes (same as index.php)
+try {
+    // Public routes
+    $router->group('', [RateLimitMiddleware::class], function (Router $r) {
+        $r->post('/auth/login',          LoginEndpoint::class);
+        $r->post('/auth/token-exchange', TokenExchangeEndpoint::class);
+        $r->post('/auth/refresh',        RefreshEndpoint::class);
+    });
+    s('✅ Public routes registered');
+
+    // Authenticated routes
+    $router->group('', [RateLimitMiddleware::class, AuthMiddleware::class], function (Router $r) {
+        $r->post('/auth/logout',  LogoutEndpoint::class);
+        $r->get('/auth/verify',   VerifyEndpoint::class);
+        $r->get('/user/profile',       ProfileEndpoint::class);
+        $r->get('/user/preferences',   PreferencesEndpoint::class);
+        $r->put('/user/preferences',   PreferencesEndpoint::class);
+        $r->get('/vehicles',                       VehicleListEndpoint::class);
+        $r->get('/vehicles/{id}',                  VehicleDetailEndpoint::class);
+        $r->put('/vehicles/{id}/odometer',         OdometerEndpoint::class);
+        $r->get('/vehicles/{id}/reminders',        VehicleRemindersEndpoint::class);
+        $r->get('/vehicles/{id}/reminders/due',    VehicleRemindersDueEndpoint::class);
+        $r->get('/reminders',      ReminderListEndpoint::class);
+        $r->get('/reminders/due',  ReminderDueEndpoint::class);
+        $r->get('/reminders/{id}', ReminderDetailEndpoint::class);
+        $r->post('/sync/push',            PushEndpoint::class);
+        $r->get('/sync/status',           SyncStatusEndpoint::class);
+        $r->post('/sync/register-device', DeviceEndpoint::class);
+        $r->get('/subscription/status', SubscriptionStatusEndpoint::class);
+    });
+    s('✅ Authenticated routes registered');
+
+    // Admin routes
+    $router->group('/admin', [RateLimitMiddleware::class, AuthMiddleware::class, AdminMiddleware::class], function (Router $r) {
+        $r->get('/test',   TestEndpoint::class);
+        $r->post('/test',  TestEndpoint::class);
+        $r->get('/users',  UsersEndpoint::class);
+        $r->get('/logs',   LogsEndpoint::class);
+        $r->get('/stats',  StatsEndpoint::class);
+    });
+    s('✅ Admin routes registered');
+    s('ℹ️ Total routes: ' . count($router->getRoutes()));
+} catch (Throwable $e) {
+    s('❌ Route registration: ' . $e->getMessage());
+    echo json_encode(['log' => $log, 'error' => ['msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine(), 'trace' => $e->getTraceAsString()]], JSON_PRETTY_PRINT); exit;
+}
+
+// Step 8: NOW dispatch (this is where the 500 likely happens)
+s('🔄 About to dispatch...');
+
+// Flush log so far in case dispatch causes a fatal
+echo "/* PRE-DISPATCH LOG: " . json_encode($log) . " */\n\n";
+flush();
+
+try {
+    $router->dispatch($request);
+    // If we get here, dispatch succeeded
+} catch (Throwable $e) {
+    // Dispatch threw an exception
+    header('Content-Type: application/json');
+    echo json_encode([
+        'log' => $log,
+        'DISPATCH_ERROR' => [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString()),
+        ]
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+}
