@@ -18,10 +18,7 @@ class Vehicle
     public function getByUser(int $userId): array
     {
         $vehicles = $this->db->fetchAll(
-            "SELECT id, user_id, vin, year, make, model, trim, 
-                    odometer, is_active, notes, photo_path,
-                    created_at, updated_at
-             FROM vehicles WHERE user_id = ? ORDER BY is_active DESC, updated_at DESC",
+            "SELECT * FROM vehicles WHERE user_id = ? ORDER BY is_active DESC, updated_at DESC",
             [$userId]
         );
 
@@ -35,10 +32,7 @@ class Vehicle
     public function getById(string $vehicleId, int $userId): ?array
     {
         $vehicle = $this->db->fetchOne(
-            "SELECT id, user_id, vin, year, make, model, trim,
-                    odometer, is_active, notes, photo_path,
-                    created_at, updated_at
-             FROM vehicles WHERE id = ? AND user_id = ?",
+            "SELECT * FROM vehicles WHERE id = ? AND user_id = ?",
             [$vehicleId, $userId]
         );
 
