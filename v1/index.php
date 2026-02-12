@@ -16,7 +16,7 @@ define('GM_API_START', microtime(true));
 // 2. Error handling
 // ============================================================================
 error_reporting(E_ALL);
-ini_set('display_errors', '0');
+ini_set('display_errors', '1');
 ini_set('log_errors', '1');
 
 set_exception_handler(function (\Throwable $e) {
