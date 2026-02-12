@@ -5,8 +5,8 @@ use GarageMinder\API\Core\Database;
 
 class User
 {
-    private Database $wpDb;   // WordPress DB: wp_users, wp_usermeta, wp_swpm_*
-    private Database $gmDb;   // GarageMinder DB: api_* tables
+    private Database $wpDb;   // WordPress DB
+    private Database $gmDb;   // GarageMinder DB
 
     public function __construct()
     {
@@ -14,15 +14,22 @@ class User
         $this->gmDb = Database::getInstance();
     }
 
+    /** Shorthand for prefixed WP table name */
+    private function t(string $table): string
+    {
+        return Database::wpTable($table);
+    }
+
     /**
      * Find user by ID
      */
     public function findById(int $id): ?array
     {
+        $t = $this->t('users');
         return $this->wpDb->fetchOne(
             "SELECT ID as id, user_login as username, user_email as email, 
                     display_name, user_registered as registered_at
-             FROM wp_users WHERE ID = ?",
+             FROM `{$t}` WHERE ID = ?",
             [$id]
         );
     }
@@ -32,37 +39,50 @@ class User
      */
     public function findByLogin(string $login): ?array
     {
+        $t = $this->t('users');
         return $this->wpDb->fetchOne(
             "SELECT ID as id, user_login as username, user_email as email,
                     display_name, user_pass as password_hash, user_registered as registered_at
-             FROM wp_users WHERE user_login = ? OR user_email = ?",
+             FROM `{$t}` WHERE user_login = ? OR user_email = ?",
             [$login, $login]
         );
     }
 
     /**
      * Validate WordPress password hash
-     * WordPress uses phpass portable hashing.
+     * 
+     * Supports:
+     * - $P$ / $H$  → WordPress phpass (MD5-based, older installs)
+     * - $wp$2y$    → WordPress 6.x+ bcrypt with $wp$ namespace prefix
+     * - $2y$       → Standard bcrypt (manual resets, plugins)
+     * - $argon2id$ → PHP argon2 (rare but possible)
      */
     public function verifyPassword(string $password, string $hash): bool
     {
-        // WordPress uses $P$ prefix for phpass
+        // WordPress phpass (older hashing)
         if (strpos($hash, '$P$') === 0 || strpos($hash, '$H$') === 0) {
             return $this->checkPhpass($password, $hash);
         }
-        // Fallback: bcrypt or native PHP password_verify
+        
+        // WordPress 6.x+ wraps bcrypt with "$wp$" prefix
+        // e.g. "$wp$2y$10$salt..." → strip to "$2y$10$salt..."
+        if (strpos($hash, '$wp$') === 0) {
+            $hash = substr($hash, 3); // Remove "$wp" prefix, keeps "$2y$10$..."
+        }
+        
         return password_verify($password, $hash);
     }
 
     /**
      * Get user's subscription level from Simple Membership plugin
-     * SWPM tables are in the WordPress database
      */
     public function getSubscriptionLevel(int $userId): string
     {
-        // Check Simple Membership plugin tables
+        $tMembers = $this->t('swpm_members_tbl');
+        $tLevels = $this->t('swpm_membership_tbl');
+
         $member = $this->wpDb->fetchOne(
-            "SELECT membership_level, account_state FROM wp_swpm_members_tbl WHERE member_id = ?",
+            "SELECT membership_level, account_state FROM `{$tMembers}` WHERE member_id = ?",
             [$userId]
         );
 
@@ -70,15 +90,13 @@ class User
             return 'free';
         }
 
-        // Check if their membership level is a paid tier
         $level = $this->wpDb->fetchOne(
-            "SELECT id, alias FROM wp_swpm_membership_tbl WHERE id = ?",
+            "SELECT id, alias FROM `{$tLevels}` WHERE id = ?",
             [$member['membership_level']]
         );
 
         if (!$level) return 'free';
 
-        // Determine if paid based on alias or level id
         $paidAliases = ['paid', 'premium', 'pro', 'subscriber'];
         $alias = strtolower($level['alias'] ?? '');
 
@@ -88,7 +106,6 @@ class User
             }
         }
 
-        // If membership level > 1 (free is typically level 1), consider it paid
         if ((int) $level['id'] > 1) {
             return 'paid';
         }
@@ -101,9 +118,12 @@ class User
      */
     public function isAdmin(int $userId): bool
     {
+        $t = $this->t('usermeta');
+        $capKey = WP_TABLE_PREFIX . 'capabilities';
+
         $meta = $this->wpDb->fetchOne(
-            "SELECT meta_value FROM wp_usermeta WHERE user_id = ? AND meta_key = 'wp_capabilities'",
-            [$userId]
+            "SELECT meta_value FROM `{$t}` WHERE user_id = ? AND meta_key = ?",
+            [$userId, $capKey]
         );
 
         if (!$meta) return false;
@@ -131,10 +151,11 @@ class User
      */
     public function getAllUsers(int $limit = 50, int $offset = 0): array
     {
+        $t = $this->t('users');
         return $this->wpDb->fetchAll(
             "SELECT ID as id, user_login as username, user_email as email,
                     display_name, user_registered as registered_at
-             FROM wp_users ORDER BY ID ASC LIMIT ? OFFSET ?",
+             FROM `{$t}` ORDER BY ID ASC LIMIT ? OFFSET ?",
             [$limit, $offset]
         );
     }
@@ -144,7 +165,8 @@ class User
      */
     public function countUsers(): int
     {
-        return (int) $this->wpDb->fetchColumn("SELECT COUNT(*) FROM wp_users");
+        $t = $this->t('users');
+        return (int) $this->wpDb->fetchColumn("SELECT COUNT(*) FROM `{$t}`");
     }
 
     // ========================================================================

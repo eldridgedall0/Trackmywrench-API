@@ -120,7 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $username && $password) {
             } while ($i < $hashLen);
             
             $verified = hash_equals($hash, $output);
-        } 
+        }
+        // WordPress 6.x+ bcrypt with $wp$ prefix: "$wp$2y$10$..." → strip to "$2y$10$..."
+        elseif (strpos($hash, '$wp$') === 0) {
+            $method = 'wp_bcrypt (stripped $wp$ prefix)';
+            $strippedHash = substr($hash, 3); // "$wp$2y$10$..." → "$2y$10$..."
+            $verified = password_verify($password, $strippedHash);
+        }
         // Modern bcrypt/argon
         else {
             $method = 'password_verify';
