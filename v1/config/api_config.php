@@ -20,7 +20,8 @@ if (!defined('GM_API')) {
 // ../../garage      = /gm/garage
 
 // ============================================================================
-define('GM_CONFIG_PATH', __DIR__ . '/../../garage/config.php');
+// define('GM_CONFIG_PATH', __DIR__ . '/../../garage/config.php');
+define('GM_CONFIG_PATH', '/home2/yesca/public_html/gm/garage/config.php');
 
 // ============================================================================
 // JWT Configuration
