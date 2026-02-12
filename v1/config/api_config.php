@@ -2,17 +2,19 @@
 /**
  * GarageMinder Mobile API - Configuration
  * 
- * IMPORTANT: This file contains sensitive configuration.
- * Protected by .htaccess in this directory.
+ * DUAL DATABASE SUPPORT:
+ * - GarageMinder DB: vehicles, entries, reminders, api_* tables
+ * - WordPress DB: wp_users, wp_usermeta (authentication)
  * 
  * ENVIRONMENT SUPPORT:
- * - Development: https://yesca.st/gm/  (WP + API + Garage all under /gm/)
- * - Production:  https://trackmywrench.com (WP), https://app.trackmywrench.com (Garage)
+ * - Dev:  https://yesca.st/gm/  (all under /gm/)
+ * - Prod: trackmywrench.com (WP) + app.trackmywrench.com (Garage)
  * 
- * The API auto-detects config.php location. To override, create a file:
- *   config/environment.php  
- * with a single line:  
- *   <?php return '/absolute/path/to/config.php';
+ * To override paths, create config/environment.php:
+ *   <?php return [
+ *       'garage_config' => '/path/to/garage/config.php',
+ *       'wp_config'     => '/path/to/wp-config.php',
+ *   ];
  */
 
 // Prevent direct access
@@ -26,78 +28,120 @@ if (!defined('GM_API')) {
 // ============================================================================
 
 /**
- * Find the GarageMinder config.php automatically.
- * 
- * Search order:
- * 1. Manual override via config/environment.php
- * 2. Common relative paths from the API directory
- * 3. Common absolute paths based on document root
- * 
- * Supports layouts:
- * - /gm/garage/config.php       (dev: yesca.st)
- * - /app/config.php             (prod: app.trackmywrench.com)
- * - /config.php                 (root level)
- * - /garage/config.php          (garage as sibling to api)
+ * Resolve paths to both config files.
+ * Returns ['garage' => '/path/to/config.php', 'wordpress' => '/path/to/wp-config.php']
  */
-function resolve_config_path(): string {
-    // 1. Manual override - highest priority
+function resolve_config_paths(): array {
+    $paths = ['garage' => null, 'wordpress' => null];
+    
+    // 1. Manual override via config/environment.php
     $overrideFile = __DIR__ . '/environment.php';
     if (file_exists($overrideFile)) {
-        $path = require $overrideFile;
-        if (is_string($path) && file_exists($path)) {
-            return $path;
+        $override = require $overrideFile;
+        if (is_array($override)) {
+            if (!empty($override['garage_config']) && file_exists($override['garage_config'])) {
+                $paths['garage'] = $override['garage_config'];
+            }
+            if (!empty($override['wp_config']) && file_exists($override['wp_config'])) {
+                $paths['wordpress'] = $override['wp_config'];
+            }
+        } elseif (is_string($override) && file_exists($override)) {
+            // Simple string = garage config only
+            $paths['garage'] = $override;
         }
     }
     
-    // 2. Auto-discovery - search common locations
-    $apiDir = dirname(__DIR__);  // api/v1/
-    $docRoot = $_SERVER['DOCUMENT_ROOT'] ?? dirname($apiDir, 3);
-    
-    $candidates = [
-        // Relative to API directory (api/v1/ -> up to find garage/)
-        $apiDir . '/../garage/config.php',           // /gm/api/../garage/config.php → /gm/garage/
-        $apiDir . '/../../garage/config.php',         // up two levels
-        dirname($apiDir) . '/garage/config.php',      // api/../garage/
+    // 2. Auto-discover garage config.php
+    if (!$paths['garage']) {
+        $apiDir = dirname(__DIR__);  // api/v1/
+        $docRoot = $_SERVER['DOCUMENT_ROOT'] ?? dirname($apiDir, 3);
         
-        // Relative to document root
-        $docRoot . '/garage/config.php',              // /public_html/garage/config.php
-        $docRoot . '/gm/garage/config.php',           // /public_html/gm/garage/config.php
-        $docRoot . '/app/config.php',                 // /public_html/app/config.php
-        $docRoot . '/config.php',                     // /public_html/config.php
+        $garageCandidates = [
+            $apiDir . '/../garage/config.php',            // /gm/api/../garage/ → /gm/garage/
+            dirname($apiDir) . '/garage/config.php',      // /gm/garage/
+            $docRoot . '/gm/garage/config.php',           // doc_root/gm/garage/
+            $docRoot . '/garage/config.php',              // doc_root/garage/
+            $docRoot . '/app/config.php',                 // doc_root/app/
+            $docRoot . '/config.php',                     // doc_root/
+            $apiDir . '/../../garage/config.php',         // up two levels
+            $apiDir . '/../../../config.php',             // up three levels
+        ];
         
-        // Production: app subdomain with separate doc root
-        dirname($docRoot) . '/app/config.php',        // sibling to public_html
-        dirname($docRoot) . '/garage/config.php',     // sibling to public_html
-        
-        // Common cPanel/hosting structures
-        dirname($docRoot) . '/public_html/garage/config.php',
-        dirname($docRoot) . '/public_html/app/config.php',
-        
-        // Legacy paths
-        $apiDir . '/../../../config.php',             // 3 levels up
-        $apiDir . '/../../config.php',                // 2 levels up
-    ];
-    
-    foreach ($candidates as $candidate) {
-        $resolved = realpath($candidate);
-        if ($resolved && is_readable($resolved)) {
-            // Verify it actually contains DB credentials
-            $contents = file_get_contents($resolved);
-            if (preg_match('/\$db_host|\$db_name|DB_HOST|DB_NAME/i', $contents)) {
-                return $resolved;
+        foreach ($garageCandidates as $candidate) {
+            $resolved = @realpath($candidate);
+            if ($resolved && is_readable($resolved)) {
+                $contents = file_get_contents($resolved);
+                if (preg_match('/GM_DB_HOST|GM_DB_NAME|\$db_host|\$db_name/i', $contents)) {
+                    $paths['garage'] = $resolved;
+                    break;
+                }
             }
         }
     }
     
-    // Nothing found - provide helpful error
-    throw new \RuntimeException(
-        "GarageMinder config.php not found. Create config/environment.php with:\n" .
-        "<?php return '/absolute/path/to/your/garage/config.php';\n\n" .
-        "Searched:\n" . implode("\n", array_map(fn($c) => "  - " . (realpath($c) ?: $c), $candidates))
-    );
+    // 3. Auto-discover wp-config.php
+    if (!$paths['wordpress']) {
+        // First: try to read WP_PATH from garage config if found
+        $wpPath = null;
+        if ($paths['garage']) {
+            $garageContents = file_get_contents($paths['garage']);
+            // Match: const WP_PATH = '/home2/yesca/public_html/gm';
+            if (preg_match("/WP_PATH\s*=\s*['\"]([^'\"]+)['\"]/", $garageContents, $m)) {
+                $wpPath = $m[1];
+            }
+        }
+        
+        $apiDir = dirname(__DIR__);
+        $docRoot = $_SERVER['DOCUMENT_ROOT'] ?? dirname($apiDir, 3);
+        
+        $wpCandidates = [];
+        
+        // If WP_PATH found in garage config, check there first
+        if ($wpPath) {
+            $wpCandidates[] = $wpPath . '/wp-config.php';
+        }
+        
+        $wpCandidates = array_merge($wpCandidates, [
+            $apiDir . '/../wp-config.php',                // /gm/api/../wp-config.php → /gm/wp-config.php
+            dirname($apiDir) . '/wp-config.php',          // /gm/wp-config.php
+            $docRoot . '/wp-config.php',                  // doc_root/wp-config.php
+            $docRoot . '/gm/wp-config.php',               // doc_root/gm/wp-config.php
+            dirname($docRoot) . '/wp-config.php',         // above doc_root
+            $apiDir . '/../../wp-config.php',             // up two levels
+        ]);
+        
+        foreach ($wpCandidates as $candidate) {
+            $resolved = @realpath($candidate);
+            if ($resolved && is_readable($resolved)) {
+                $contents = file_get_contents($resolved);
+                if (preg_match('/DB_NAME|DB_HOST/', $contents)) {
+                    $paths['wordpress'] = $resolved;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (!$paths['garage']) {
+        throw new \RuntimeException(
+            "GarageMinder config.php not found. Create config/environment.php with:\n" .
+            "<?php return ['garage_config' => '/absolute/path/to/garage/config.php', 'wp_config' => '/path/to/wp-config.php'];"
+        );
+    }
+    
+    if (!$paths['wordpress']) {
+        throw new \RuntimeException(
+            "WordPress wp-config.php not found. Add 'wp_config' to config/environment.php:\n" .
+            "<?php return ['garage_config' => '" . $paths['garage'] . "', 'wp_config' => '/path/to/wp-config.php'];"
+        );
+    }
+    
+    return $paths;
 }
 
-define('GM_CONFIG_PATH', resolve_config_path());
+$_configPaths = resolve_config_paths();
+define('GM_CONFIG_PATH', $_configPaths['garage']);
+define('WP_CONFIG_PATH', $_configPaths['wordpress']);
 
 // ============================================================================
 // JWT Configuration
@@ -111,31 +155,29 @@ define('JWT_ALGORITHM', 'HS256');
 // ============================================================================
 // Rate Limiting
 // ============================================================================
-define('RATE_LIMIT_USER_REQUESTS', 100);         // Per user per window
-define('RATE_LIMIT_USER_WINDOW', 60);            // Window in seconds
-define('RATE_LIMIT_IP_REQUESTS', 200);           // Per IP per window
-define('RATE_LIMIT_IP_WINDOW', 60);              // Window in seconds
-define('RATE_LIMIT_LOGIN_REQUESTS', 10);         // Login attempts per IP
-define('RATE_LIMIT_LOGIN_WINDOW', 300);          // 5 minutes
+define('RATE_LIMIT_USER_REQUESTS', 100);
+define('RATE_LIMIT_USER_WINDOW', 60);
+define('RATE_LIMIT_IP_REQUESTS', 200);
+define('RATE_LIMIT_IP_WINDOW', 60);
+define('RATE_LIMIT_LOGIN_REQUESTS', 10);
+define('RATE_LIMIT_LOGIN_WINDOW', 300);
 
 // ============================================================================
 // API Settings
 // ============================================================================
 define('API_VERSION', '1.0.0');
 
-// Auto-detect base path from SCRIPT_NAME
-// Works under /api/v1/, /gm/api/v1/, or any subdirectory
+// Auto-detect base path
 $_scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '/api/v1/index.php');
 define('API_PREFIX', rtrim($_scriptDir, '/'));
 
 define('API_DEBUG', true);                        // TODO: Set false for production!
-define('API_LOG_REQUESTS', true);                 // Log all requests to DB
-define('API_LOG_BODY', false);                    // Log request bodies
-define('API_MAX_BODY_SIZE', 1048576);             // 1MB max request body
+define('API_LOG_REQUESTS', true);
+define('API_LOG_BODY', false);
+define('API_MAX_BODY_SIZE', 1048576);
 
 // ============================================================================
-// CORS Configuration
-// Automatically includes current domain + production domains
+// CORS - auto-includes current domain
 // ============================================================================
 $_currentOrigin = ($_SERVER['REQUEST_SCHEME'] ?? 'https') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
 define('CORS_ALLOWED_ORIGINS', array_unique(array_filter([
@@ -146,30 +188,26 @@ define('CORS_ALLOWED_ORIGINS', array_unique(array_filter([
     'https://yesca.st',
 ])));
 define('CORS_ALLOW_CREDENTIALS', true);
-define('CORS_MAX_AGE', 86400);                    // 24 hours preflight cache
+define('CORS_MAX_AGE', 86400);
 
 // ============================================================================
 // Security
 // ============================================================================
-define('ADMIN_ROLE', 'administrator');             // WordPress role for admin API access
+define('ADMIN_ROLE', 'administrator');
 define('PASSWORD_HASH_ALGO', PASSWORD_BCRYPT);
 define('BRUTE_FORCE_LOCKOUT_ATTEMPTS', 10);
-define('BRUTE_FORCE_LOCKOUT_DURATION', 900);      // 15 minutes lockout
+define('BRUTE_FORCE_LOCKOUT_DURATION', 900);
 
 // ============================================================================
-// Reminders
+// Reminders & Sync
 // ============================================================================
 define('REMINDERS_DUE_WINDOW_DAYS', 30);
 define('REMINDERS_OVERDUE_INCLUDE', true);
-
-// ============================================================================
-// Sync
-// ============================================================================
 define('SYNC_MAX_VEHICLES_PER_PUSH', 50);
-define('SYNC_MAX_ODOMETER_JUMP', 10000);           // Max single odometer increase (miles)
+define('SYNC_MAX_ODOMETER_JUMP', 10000);
 
 // ============================================================================
-// Helper: Load JWT Secret (auto-generates on first run)
+// Helper: JWT Secret (auto-generates on first run)
 // ============================================================================
 function get_jwt_secret(): string {
     $secret_file = JWT_SECRET_FILE;
@@ -190,63 +228,92 @@ function get_jwt_secret(): string {
 }
 
 // ============================================================================
-// Helper: Get DB credentials from GarageMinder config.php
-// Supports both $db_host style and define('DB_HOST') style
+// Helper: Parse DB credentials from a config file
+// Supports 3 patterns:
+//   1. const GM_DB_HOST = 'value';       (GarageMinder style)
+//   2. $db_host = 'value';               (legacy variable style)
+//   3. define('DB_HOST', 'value');        (WordPress style)
 // ============================================================================
-function get_db_config(): array {
-    $config_path = GM_CONFIG_PATH;
-    
-    if (!file_exists($config_path)) {
-        throw new \RuntimeException('GarageMinder config.php not found at: ' . $config_path);
+function parse_db_credentials(string $file_path, string $label = 'config'): array {
+    if (!file_exists($file_path)) {
+        throw new \RuntimeException("{$label} not found at: {$file_path}");
     }
     
-    $config_contents = file_get_contents($config_path);
-    $db_config = [];
+    $contents = file_get_contents($file_path);
+    $db = [];
     
-    // Pattern 1: GarageMinder style - $db_host = 'value';
-    $gm_patterns = [
-        'host' => '/\$db_host\s*=\s*[\'"]([^\'"]+)[\'"]/',
-        'name' => '/\$db_name\s*=\s*[\'"]([^\'"]+)[\'"]/',
-        'user' => '/\$db_user\s*=\s*[\'"]([^\'"]+)[\'"]/',
-        'pass' => '/\$db_pass\s*=\s*[\'"]([^\'"]*)[\'"]/',
+    // Pattern 1: const GM_DB_HOST = 'value';
+    $const_patterns = [
+        'host' => '/const\s+GM_DB_HOST\s*=\s*[\'"]([^\'"]+)[\'"]/',
+        'name' => '/const\s+GM_DB_NAME\s*=\s*[\'"]([^\'"]+)[\'"]/',
+        'user' => '/const\s+GM_DB_USER\s*=\s*[\'"]([^\'"]+)[\'"]/',
+        'pass' => '/const\s+GM_DB_PASS\s*=\s*[\'"]([^\'"]*)[\'"]/',
     ];
     
-    foreach ($gm_patterns as $key => $pattern) {
-        if (preg_match($pattern, $config_contents, $matches)) {
-            $db_config[$key] = $matches[1];
+    foreach ($const_patterns as $key => $pattern) {
+        if (preg_match($pattern, $contents, $m)) {
+            $db[$key] = $m[1];
         }
     }
     
-    // Pattern 2: WordPress style - define('DB_HOST', 'value');
-    if (empty($db_config['host'])) {
-        $wp_patterns = [
+    // Pattern 2: $db_host = 'value';
+    if (empty($db['host'])) {
+        $var_patterns = [
+            'host' => '/\$db_host\s*=\s*[\'"]([^\'"]+)[\'"]/',
+            'name' => '/\$db_name\s*=\s*[\'"]([^\'"]+)[\'"]/',
+            'user' => '/\$db_user\s*=\s*[\'"]([^\'"]+)[\'"]/',
+            'pass' => '/\$db_pass\s*=\s*[\'"]([^\'"]*)[\'"]/',
+        ];
+        
+        foreach ($var_patterns as $key => $pattern) {
+            if (preg_match($pattern, $contents, $m)) {
+                $db[$key] = $m[1];
+            }
+        }
+    }
+    
+    // Pattern 3: define('DB_HOST', 'value');  (WordPress wp-config.php)
+    if (empty($db['host'])) {
+        $define_patterns = [
             'host' => '/define\s*\(\s*[\'"]DB_HOST[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]/',
             'name' => '/define\s*\(\s*[\'"]DB_NAME[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]/',
             'user' => '/define\s*\(\s*[\'"]DB_USER[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]/',
             'pass' => '/define\s*\(\s*[\'"]DB_PASSWORD[\'"]\s*,\s*[\'"]([^\'"]*)[\'"]/',
         ];
         
-        foreach ($wp_patterns as $key => $pattern) {
-            if (preg_match($pattern, $config_contents, $matches)) {
-                $db_config[$key] = $matches[1];
+        foreach ($define_patterns as $key => $pattern) {
+            if (preg_match($pattern, $contents, $m)) {
+                $db[$key] = $m[1];
             }
         }
     }
     
-    // Validate required values
-    $required = ['host', 'name', 'user'];
-    foreach ($required as $key) {
-        if (empty($db_config[$key])) {
+    // Validate
+    foreach (['host', 'name', 'user'] as $key) {
+        if (empty($db[$key])) {
             throw new \RuntimeException(
-                "Could not extract db_{$key} from config.php at: {$config_path}\n" .
-                "Expected either \$db_{$key} = 'value'; or define('DB_" . strtoupper($key) . "', 'value');"
+                "Could not extract '{$key}' from {$label} at: {$file_path}"
             );
         }
     }
     
-    if (!isset($db_config['pass'])) {
-        $db_config['pass'] = '';
+    if (!isset($db['pass'])) {
+        $db['pass'] = '';
     }
     
-    return $db_config;
+    return $db;
+}
+
+/**
+ * Get GarageMinder database credentials
+ */
+function get_db_config(): array {
+    return parse_db_credentials(GM_CONFIG_PATH, 'GarageMinder config.php');
+}
+
+/**
+ * Get WordPress database credentials
+ */
+function get_wp_db_config(): array {
+    return parse_db_credentials(WP_CONFIG_PATH, 'WordPress wp-config.php');
 }

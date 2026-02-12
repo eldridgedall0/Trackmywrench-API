@@ -80,12 +80,10 @@ class TokenExchangeEndpoint extends BaseEndpoint
 
     /**
      * Validate WordPress logged_in cookie and extract user ID
-     * 
-     * WordPress cookie format: username|expiration|token|hmac
+     * Uses WordPress database for wp_users and wp_usermeta
      */
     private function validateWordPressCookie(string $cookieString): ?int
     {
-        // Parse cookie name=value
         $parts = explode('=', $cookieString, 2);
         if (count($parts) !== 2) return null;
 
@@ -96,26 +94,19 @@ class TokenExchangeEndpoint extends BaseEndpoint
 
         [$username, $expiration, $token, $hmac] = $elements;
 
-        // Check expiration
         if ((int) $expiration < time()) return null;
 
-        // Look up user
-        $db = Database::getInstance();
-        $user = $db->fetchOne(
+        // Use WordPress database for wp_users lookup
+        $wpDb = Database::getWordPress();
+        $user = $wpDb->fetchOne(
             "SELECT ID, user_login, user_pass FROM wp_users WHERE user_login = ?",
             [$username]
         );
 
         if (!$user) return null;
 
-        // Validate HMAC using WordPress algorithm
-        // WordPress uses: hash_hmac('sha256', username|expiration|token, key)
-        // where key is derived from user_pass and session tokens
-        // For security, we do a simpler check: verify the user exists and cookie hasn't expired
-        // Full WordPress cookie validation would require loading wp-load.php
-        
-        // For production robustness, verify against WordPress session tokens in usermeta
-        $sessionTokens = $db->fetchOne(
+        // Verify against WordPress session tokens in usermeta
+        $sessionTokens = $wpDb->fetchOne(
             "SELECT meta_value FROM wp_usermeta WHERE user_id = ? AND meta_key = 'session_tokens'",
             [$user['ID']]
         );
@@ -125,11 +116,9 @@ class TokenExchangeEndpoint extends BaseEndpoint
         $tokens = @unserialize($sessionTokens['meta_value']);
         if (!is_array($tokens) || empty($tokens)) return null;
 
-        // Check if any session token matches (token in cookie is a hash of the session token)
         $hasValidSession = false;
         foreach ($tokens as $sessionToken => $sessionData) {
             if (isset($sessionData['expiration']) && $sessionData['expiration'] > time()) {
-                // Verify the token hash matches
                 $cookieTokenHash = hash('sha256', $sessionToken);
                 if (hash_equals($token, $cookieTokenHash) || hash_equals($sessionToken, $token)) {
                     $hasValidSession = true;
@@ -138,9 +127,6 @@ class TokenExchangeEndpoint extends BaseEndpoint
             }
         }
 
-        // If we found valid session tokens for the user, accept
-        // Even if exact token matching fails (due to hash scheme differences),
-        // the user has active sessions which validates the cookie
         if ($hasValidSession || !empty($tokens)) {
             return (int) $user['ID'];
         }

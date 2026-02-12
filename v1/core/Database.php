@@ -2,21 +2,33 @@
 /**
  * GarageMinder Mobile API - Database Wrapper
  * 
- * Connects to the SAME database as the existing GarageMinder web app.
- * Uses credentials from the existing config.php file.
- * Provides PDO-based access with prepared statements.
+ * Supports TWO database connections:
+ * - GarageMinder DB (garage): vehicles, entries, reminders, api_* tables
+ * - WordPress DB (wordpress): wp_users, wp_usermeta (authentication)
+ * 
+ * Usage:
+ *   $db = Database::getInstance();          // GarageMinder DB (default)
+ *   $db->fetchAll("SELECT * FROM vehicles WHERE user_id = ?", [1]);
+ * 
+ *   $wpDb = Database::getWordPress();       // WordPress DB
+ *   $wpDb->fetchAll("SELECT * FROM wp_users WHERE ID = ?", [1]);
  */
 
 namespace GarageMinder\API\Core;
 
 class Database
 {
-    private static ?Database $instance = null;
+    private static ?Database $gmInstance = null;
+    private static ?Database $wpInstance = null;
     private \PDO $pdo;
 
-    private function __construct()
+    private function __construct(string $type = 'garage')
     {
-        $config = get_db_config();
+        if ($type === 'wordpress') {
+            $config = get_wp_db_config();
+        } else {
+            $config = get_db_config();
+        }
 
         $dsn = "mysql:host={$config['host']};dbname={$config['name']};charset=utf8mb4";
 
@@ -31,27 +43,34 @@ class Database
     }
 
     /**
-     * Get singleton instance
+     * Get GarageMinder database instance (default)
+     * Used for: vehicles, entries, reminders, api_* tables
      */
     public static function getInstance(): self
     {
-        if (self::$instance === null) {
-            self::$instance = new self();
+        if (self::$gmInstance === null) {
+            self::$gmInstance = new self('garage');
         }
-        return self::$instance;
+        return self::$gmInstance;
     }
 
     /**
-     * Get PDO connection
+     * Get WordPress database instance
+     * Used for: wp_users, wp_usermeta (authentication)
      */
+    public static function getWordPress(): self
+    {
+        if (self::$wpInstance === null) {
+            self::$wpInstance = new self('wordpress');
+        }
+        return self::$wpInstance;
+    }
+
     public function getPdo(): \PDO
     {
         return $this->pdo;
     }
 
-    /**
-     * Execute a query and return all results
-     */
     public function fetchAll(string $sql, array $params = []): array
     {
         $stmt = $this->pdo->prepare($sql);
@@ -59,9 +78,6 @@ class Database
         return $stmt->fetchAll();
     }
 
-    /**
-     * Execute a query and return single row
-     */
     public function fetchOne(string $sql, array $params = []): ?array
     {
         $stmt = $this->pdo->prepare($sql);
@@ -70,9 +86,6 @@ class Database
         return $result ?: null;
     }
 
-    /**
-     * Execute a query and return single column value
-     */
     public function fetchColumn(string $sql, array $params = [])
     {
         $stmt = $this->pdo->prepare($sql);
@@ -80,9 +93,6 @@ class Database
         return $stmt->fetchColumn();
     }
 
-    /**
-     * Execute an INSERT/UPDATE/DELETE and return affected rows
-     */
     public function execute(string $sql, array $params = []): int
     {
         $stmt = $this->pdo->prepare($sql);
@@ -90,61 +100,28 @@ class Database
         return $stmt->rowCount();
     }
 
-    /**
-     * Insert a row and return the last insert ID
-     */
     public function insert(string $table, array $data): int
     {
         $columns = implode(', ', array_map(fn($col) => "`{$col}`", array_keys($data)));
         $placeholders = implode(', ', array_fill(0, count($data), '?'));
-
         $sql = "INSERT INTO `{$table}` ({$columns}) VALUES ({$placeholders})";
         $this->execute($sql, array_values($data));
-
         return (int) $this->pdo->lastInsertId();
     }
 
-    /**
-     * Update rows in a table
-     */
     public function update(string $table, array $data, string $where, array $whereParams = []): int
     {
         $setParts = array_map(fn($col) => "`{$col}` = ?", array_keys($data));
         $setClause = implode(', ', $setParts);
-
         $sql = "UPDATE `{$table}` SET {$setClause} WHERE {$where}";
         $params = array_merge(array_values($data), $whereParams);
-
         return $this->execute($sql, $params);
     }
 
-    /**
-     * Begin transaction
-     */
-    public function beginTransaction(): bool
-    {
-        return $this->pdo->beginTransaction();
-    }
+    public function beginTransaction(): bool { return $this->pdo->beginTransaction(); }
+    public function commit(): bool { return $this->pdo->commit(); }
+    public function rollback(): bool { return $this->pdo->rollBack(); }
 
-    /**
-     * Commit transaction
-     */
-    public function commit(): bool
-    {
-        return $this->pdo->commit();
-    }
-
-    /**
-     * Rollback transaction
-     */
-    public function rollback(): bool
-    {
-        return $this->pdo->rollBack();
-    }
-
-    /**
-     * Check if a table exists
-     */
     public function tableExists(string $table): bool
     {
         $result = $this->fetchOne(
@@ -154,7 +131,6 @@ class Database
         return $result && $result['cnt'] > 0;
     }
 
-    // Prevent cloning and deserialization
     private function __clone() {}
     public function __wakeup() { throw new \RuntimeException("Cannot deserialize singleton"); }
 }

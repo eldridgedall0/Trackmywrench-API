@@ -5,11 +5,13 @@ use GarageMinder\API\Core\Database;
 
 class User
 {
-    private Database $db;
+    private Database $wpDb;   // WordPress DB: wp_users, wp_usermeta, wp_swpm_*
+    private Database $gmDb;   // GarageMinder DB: api_* tables
 
     public function __construct()
     {
-        $this->db = Database::getInstance();
+        $this->wpDb = Database::getWordPress();
+        $this->gmDb = Database::getInstance();
     }
 
     /**
@@ -17,7 +19,7 @@ class User
      */
     public function findById(int $id): ?array
     {
-        return $this->db->fetchOne(
+        return $this->wpDb->fetchOne(
             "SELECT ID as id, user_login as username, user_email as email, 
                     display_name, user_registered as registered_at
              FROM wp_users WHERE ID = ?",
@@ -30,7 +32,7 @@ class User
      */
     public function findByLogin(string $login): ?array
     {
-        return $this->db->fetchOne(
+        return $this->wpDb->fetchOne(
             "SELECT ID as id, user_login as username, user_email as email,
                     display_name, user_pass as password_hash, user_registered as registered_at
              FROM wp_users WHERE user_login = ? OR user_email = ?",
@@ -54,11 +56,12 @@ class User
 
     /**
      * Get user's subscription level from Simple Membership plugin
+     * SWPM tables are in the WordPress database
      */
     public function getSubscriptionLevel(int $userId): string
     {
         // Check Simple Membership plugin tables
-        $member = $this->db->fetchOne(
+        $member = $this->wpDb->fetchOne(
             "SELECT membership_level, account_state FROM wp_swpm_members_tbl WHERE member_id = ?",
             [$userId]
         );
@@ -68,7 +71,7 @@ class User
         }
 
         // Check if their membership level is a paid tier
-        $level = $this->db->fetchOne(
+        $level = $this->wpDb->fetchOne(
             "SELECT id, alias FROM wp_swpm_membership_tbl WHERE id = ?",
             [$member['membership_level']]
         );
@@ -76,7 +79,6 @@ class User
         if (!$level) return 'free';
 
         // Determine if paid based on alias or level id
-        // Adjust this logic based on your actual membership level setup
         $paidAliases = ['paid', 'premium', 'pro', 'subscriber'];
         $alias = strtolower($level['alias'] ?? '');
 
@@ -99,7 +101,7 @@ class User
      */
     public function isAdmin(int $userId): bool
     {
-        $meta = $this->db->fetchOne(
+        $meta = $this->wpDb->fetchOne(
             "SELECT meta_value FROM wp_usermeta WHERE user_id = ? AND meta_key = 'wp_capabilities'",
             [$userId]
         );
@@ -129,7 +131,7 @@ class User
      */
     public function getAllUsers(int $limit = 50, int $offset = 0): array
     {
-        return $this->db->fetchAll(
+        return $this->wpDb->fetchAll(
             "SELECT ID as id, user_login as username, user_email as email,
                     display_name, user_registered as registered_at
              FROM wp_users ORDER BY ID ASC LIMIT ? OFFSET ?",
@@ -142,7 +144,7 @@ class User
      */
     public function countUsers(): int
     {
-        return (int) $this->db->fetchColumn("SELECT COUNT(*) FROM wp_users");
+        return (int) $this->wpDb->fetchColumn("SELECT COUNT(*) FROM wp_users");
     }
 
     // ========================================================================
