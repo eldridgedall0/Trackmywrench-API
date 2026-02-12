@@ -45,7 +45,7 @@ define('API_VERSION', '1.0.0');
 // Handles both /api/v1 and /gm/api/v1 and any other subdirectory
 $_scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '/api/v1/index.php');
 define('API_PREFIX', rtrim($_scriptDir, '/'));
-define('API_DEBUG', false);                       // Set true for development
+define('API_DEBUG', true);                       // Set true for development
 define('API_LOG_REQUESTS', true);                 // Log all requests to DB
 define('API_LOG_BODY', false);                    // Log request bodies (careful with sensitive data)
 define('API_MAX_BODY_SIZE', 1048576);             // 1MB max request body
