@@ -15,13 +15,8 @@ if (!defined('GM_API')) {
 // ============================================================================
 // Path to existing GarageMinder config.php
 // Adjust this path based on your server layout
-// __DIR__           = /gm/api/v1
-// ../../            = /gm
-// ../../garage      = /gm/garage
-
 // ============================================================================
-// define('GM_CONFIG_PATH', __DIR__ . '/../../garage/config.php');
-define('GM_CONFIG_PATH', '/home2/yesca/public_html/gm/garage/config.php');
+define('GM_CONFIG_PATH', __DIR__ . '/../../../config.php');
 
 // ============================================================================
 // JWT Configuration
@@ -46,7 +41,10 @@ define('RATE_LIMIT_LOGIN_WINDOW', 300);          // 5 minutes
 // API Settings
 // ============================================================================
 define('API_VERSION', '1.0.0');
-define('API_PREFIX', '/api/v1');
+// Detect base path dynamically from SCRIPT_NAME
+// Handles both /api/v1 and /gm/api/v1 and any other subdirectory
+$_scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '/api/v1/index.php');
+define('API_PREFIX', rtrim($_scriptDir, '/'));
 define('API_DEBUG', false);                       // Set true for development
 define('API_LOG_REQUESTS', true);                 // Log all requests to DB
 define('API_LOG_BODY', false);                    // Log request bodies (careful with sensitive data)

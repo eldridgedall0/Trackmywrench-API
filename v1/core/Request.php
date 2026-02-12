@@ -35,12 +35,22 @@ class Request
 
     private function parsePath(): string
     {
-        $path = parse_url($this->uri, PHP_URL_PATH) ?? '/';
-        // Remove API prefix
-        $prefix = API_PREFIX;
-        if (strpos($path, $prefix) === 0) {
-            $path = substr($path, strlen($prefix));
+        // Use PATH_INFO if available (handles index.php/path style)
+        if (!empty($_SERVER['PATH_INFO'])) {
+            $path = $_SERVER['PATH_INFO'];
+        } else {
+            $path = parse_url($this->uri, PHP_URL_PATH) ?? '/';
+            
+            // Remove API prefix
+            $prefix = API_PREFIX;
+            if (strpos($path, $prefix) === 0) {
+                $path = substr($path, strlen($prefix));
+            }
+            
+            // Remove index.php if present (fallback when .htaccess rewrite fails)
+            $path = preg_replace('#^/index\.php#', '', $path);
         }
+        
         // Ensure leading slash, remove trailing
         $path = '/' . trim($path, '/');
         return $path;

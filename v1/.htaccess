@@ -3,7 +3,8 @@
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /api/v1/
+    # Auto-detect base - works under /api/v1/ or /gm/api/v1/ etc.
+    RewriteBase /gm/api/v1/
 
     # Block access to sensitive directories
     RewriteRule ^config/ - [F,L]

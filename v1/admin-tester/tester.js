@@ -1,8 +1,10 @@
 /**
  * GarageMinder API Admin Tester
  */
-const API_BASE = window.location.origin + '/gm/api/v1';
-//const API_BASE = window.location.origin + '/' + window.location.pathname.split('/')[1] + '/api/v1';
+// Auto-detect API base from current page location
+// Works whether app is at /api/v1/ or /gm/api/v1/ etc.
+const TESTER_PATH = window.location.pathname.replace(/\/admin-tester\/?.*$/, '');
+const API_BASE = window.location.origin + TESTER_PATH + '/index.php';
 let accessToken = localStorage.getItem('gm_admin_token');
 let refreshToken = localStorage.getItem('gm_admin_refresh');
 let currentUser = null;
