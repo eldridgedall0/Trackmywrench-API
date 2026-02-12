@@ -1,7 +1,8 @@
 /**
  * GarageMinder API Admin Tester
  */
-const API_BASE = window.location.origin + '/api/v1';
+// const API_BASE = window.location.origin + '/api/v1';
+const API_BASE = window.location.origin + window.location.pathname.split('/')[1] + '/api/v1';
 let accessToken = localStorage.getItem('gm_admin_token');
 let refreshToken = localStorage.getItem('gm_admin_refresh');
 let currentUser = null;
