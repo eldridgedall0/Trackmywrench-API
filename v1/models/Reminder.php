@@ -1,4 +1,26 @@
 <?php
+/**
+ * Reminder Model - Matched to actual GarageMinder DB schema
+ * 
+ * ACTUAL reminders table columns:
+ *   id              varchar(64)  PK
+ *   vehicle_id      varchar(64)  FK → vehicles.id
+ *   service_name    varchar(255)     (NOT "service_type")
+ *   title           varchar(255)     (NOT "description")
+ *   base_odo        int
+ *   base_date       date
+ *   interval_miles  int              (recurrence miles)
+ *   interval_months int              (recurrence months)
+ *   next_odo        int              (NOT "due_mileage")
+ *   next_date       date             (NOT "due_date")
+ *   notes           text
+ *   created_at      datetime
+ *   updated_at      datetime
+ * 
+ * ACTUAL vehicles table (for joins):
+ *   current_odo     int              (NOT "odometer")
+ */
+
 namespace GarageMinder\API\Models;
 
 use GarageMinder\API\Core\Database;
@@ -18,12 +40,15 @@ class Reminder
     public function getByUser(int $userId): array
     {
         $reminders = $this->db->fetchAll(
-            "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
-                    v.id as vehicle_id
+            "SELECT r.id, r.vehicle_id, r.service_name, r.title,
+                    r.base_odo, r.base_date, r.interval_miles, r.interval_months,
+                    r.next_odo, r.next_date, r.notes, r.created_at, r.updated_at,
+                    v.year, v.make, v.model, v.name as vehicle_name,
+                    v.current_odo
              FROM reminders r
              JOIN vehicles v ON r.vehicle_id = v.id
              WHERE v.user_id = ?
-             ORDER BY r.due_date ASC, r.due_mileage ASC",
+             ORDER BY r.next_date ASC, r.next_odo ASC",
             [$userId]
         );
 
@@ -32,7 +57,6 @@ class Reminder
 
     /**
      * Get reminders for a specific vehicle
-     * Vehicle IDs are strings (e.g. "v_1766985747930_q4x1fvgxzde")
      */
     public function getByVehicle(string $vehicleId, int $userId): array
     {
@@ -45,12 +69,15 @@ class Reminder
         if (!$vehicle) return [];
 
         $reminders = $this->db->fetchAll(
-            "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
-                    v.id as vehicle_id
+            "SELECT r.id, r.vehicle_id, r.service_name, r.title,
+                    r.base_odo, r.base_date, r.interval_miles, r.interval_months,
+                    r.next_odo, r.next_date, r.notes, r.created_at, r.updated_at,
+                    v.year, v.make, v.model, v.name as vehicle_name,
+                    v.current_odo
              FROM reminders r
              JOIN vehicles v ON r.vehicle_id = v.id
              WHERE r.vehicle_id = ?
-             ORDER BY r.due_date ASC, r.due_mileage ASC",
+             ORDER BY r.next_date ASC, r.next_odo ASC",
             [$vehicleId]
         );
 
@@ -59,12 +86,16 @@ class Reminder
 
     /**
      * Get single reminder by ID
+     * Note: reminder IDs are also varchar(64) strings
      */
-    public function getById(int $reminderId, int $userId): ?array
+    public function getById(string $reminderId, int $userId): ?array
     {
         $reminder = $this->db->fetchOne(
-            "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
-                    v.id as vehicle_id
+            "SELECT r.id, r.vehicle_id, r.service_name, r.title,
+                    r.base_odo, r.base_date, r.interval_miles, r.interval_months,
+                    r.next_odo, r.next_date, r.notes, r.created_at, r.updated_at,
+                    v.year, v.make, v.model, v.name as vehicle_name,
+                    v.current_odo
              FROM reminders r
              JOIN vehicles v ON r.vehicle_id = v.id
              WHERE r.id = ? AND v.user_id = ?",
@@ -84,22 +115,25 @@ class Reminder
         $today = date('Y-m-d');
 
         $reminders = $this->db->fetchAll(
-            "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
-                    v.id as vehicle_id
+            "SELECT r.id, r.vehicle_id, r.service_name, r.title,
+                    r.base_odo, r.base_date, r.interval_miles, r.interval_months,
+                    r.next_odo, r.next_date, r.notes, r.created_at, r.updated_at,
+                    v.year, v.make, v.model, v.name as vehicle_name,
+                    v.current_odo
              FROM reminders r
              JOIN vehicles v ON r.vehicle_id = v.id
              WHERE v.user_id = ?
                AND (
-                   (r.due_date IS NOT NULL AND r.due_date <= ?)
-                   OR (r.due_mileage IS NOT NULL AND r.due_mileage <= v.odometer)
+                   (r.next_date IS NOT NULL AND r.next_date <= ?)
+                   OR (r.next_odo IS NOT NULL AND r.next_odo <= v.current_odo)
                )
              ORDER BY 
                CASE 
-                 WHEN r.due_date < ? THEN 0
-                 WHEN r.due_mileage <= v.odometer THEN 0
+                 WHEN r.next_date < ? THEN 0
+                 WHEN r.next_odo <= v.current_odo THEN 0
                  ELSE 1
                END ASC,
-               r.due_date ASC",
+               r.next_date ASC",
             [$userId, $futureDate, $today]
         );
 
@@ -128,16 +162,19 @@ class Reminder
         if (!$vehicle) return [];
 
         $reminders = $this->db->fetchAll(
-            "SELECT r.*, v.year, v.make, v.model, v.odometer as current_odometer,
-                    v.id as vehicle_id
+            "SELECT r.id, r.vehicle_id, r.service_name, r.title,
+                    r.base_odo, r.base_date, r.interval_miles, r.interval_months,
+                    r.next_odo, r.next_date, r.notes, r.created_at, r.updated_at,
+                    v.year, v.make, v.model, v.name as vehicle_name,
+                    v.current_odo
              FROM reminders r
              JOIN vehicles v ON r.vehicle_id = v.id
              WHERE r.vehicle_id = ?
                AND (
-                   (r.due_date IS NOT NULL AND r.due_date <= ?)
-                   OR (r.due_mileage IS NOT NULL AND r.due_mileage <= v.odometer)
+                   (r.next_date IS NOT NULL AND r.next_date <= ?)
+                   OR (r.next_odo IS NOT NULL AND r.next_odo <= v.current_odo)
                )
-             ORDER BY r.due_date ASC",
+             ORDER BY r.next_date ASC",
             [$vehicleId, $futureDate]
         );
 
@@ -151,47 +188,65 @@ class Reminder
 
     /**
      * Format reminder for API response
+     * Maps DB column names → clean API field names
      */
     private function formatReminder(array $r): array
     {
+        // Determine if recurring based on whether intervals are set
+        $isRecurring = !empty($r['interval_miles']) || !empty($r['interval_months']);
+
+        // Build vehicle display name
+        $vehicleDisplayName = $r['vehicle_name'] ?? '';
+        if (empty($vehicleDisplayName) && ($r['make'] || $r['model'])) {
+            $vehicleDisplayName = trim(($r['year'] ?? '') . ' ' . ($r['make'] ?? '') . ' ' . ($r['model'] ?? ''));
+        }
+
         return [
-            'id'              => (int) $r['id'],
-            'vehicle_id'      => $r['vehicle_id'],  // String ID
-            'vehicle_name'    => trim(($r['year'] ?? '') . ' ' . $r['make'] . ' ' . $r['model']),
-            'service_type'    => $r['service_type'] ?? null,
-            'description'     => $r['description'] ?? null,
-            'due_date'        => $r['due_date'] ?? null,
-            'due_mileage'     => $r['due_mileage'] ? (int) $r['due_mileage'] : null,
-            'current_odometer'=> (int) ($r['current_odometer'] ?? 0),
-            'notes'           => $r['notes'] ?? null,
-            'is_recurring'    => (bool) ($r['is_recurring'] ?? false),
-            'recurrence_interval' => $r['recurrence_interval'] ?? null,
-            'recurrence_miles'    => $r['recurrence_miles'] ? (int) $r['recurrence_miles'] : null,
-            'created_at'      => $r['created_at'] ?? null,
-            'updated_at'      => $r['updated_at'] ?? null,
+            'id'                => $r['id'],                                    // String ID
+            'vehicle_id'        => $r['vehicle_id'],                            // String ID
+            'vehicle_name'      => $vehicleDisplayName,
+            'service_name'      => $r['service_name'],                          // DB: service_name
+            'title'             => $r['title'],                                 // DB: title
+            'due_date'          => $r['next_date'] ?? null,                     // DB: next_date → API: due_date
+            'due_mileage'       => $r['next_odo'] ? (int) $r['next_odo'] : null, // DB: next_odo → API: due_mileage
+            'current_odometer'  => (int) ($r['current_odo'] ?? 0),              // DB: current_odo
+            'base_odo'          => $r['base_odo'] ? (int) $r['base_odo'] : null,
+            'base_date'         => $r['base_date'] ?? null,
+            'is_recurring'      => $isRecurring,                                // Derived from intervals
+            'interval_miles'    => $r['interval_miles'] ? (int) $r['interval_miles'] : null,  // DB: interval_miles
+            'interval_months'   => $r['interval_months'] ? (int) $r['interval_months'] : null, // DB: interval_months
+            'notes'             => $r['notes'] ?? null,
+            'created_at'        => $r['created_at'] ?? null,
+            'updated_at'        => $r['updated_at'] ?? null,
         ];
     }
 
+    /**
+     * Check if reminder is overdue
+     */
     private function isOverdue(array $r, string $today): bool
     {
-        if (!empty($r['due_date']) && $r['due_date'] < $today) return true;
-        if (!empty($r['due_mileage']) && (int)$r['due_mileage'] <= (int)($r['current_odometer'] ?? 0)) return true;
+        if (!empty($r['next_date']) && $r['next_date'] < $today) return true;
+        if (!empty($r['next_odo']) && (int)$r['next_odo'] <= (int)($r['current_odo'] ?? 0)) return true;
         return false;
     }
 
+    /**
+     * Calculate urgency level
+     */
     private function calculateUrgency(array $r, string $today): string
     {
         $overdue = $this->isOverdue($r, $today);
         if ($overdue) return 'overdue';
 
-        if (!empty($r['due_date'])) {
-            $daysUntil = (strtotime($r['due_date']) - strtotime($today)) / 86400;
+        if (!empty($r['next_date'])) {
+            $daysUntil = (strtotime($r['next_date']) - strtotime($today)) / 86400;
             if ($daysUntil <= 7) return 'urgent';
             if ($daysUntil <= 30) return 'upcoming';
         }
 
-        if (!empty($r['due_mileage'])) {
-            $milesUntil = (int)$r['due_mileage'] - (int)($r['current_odometer'] ?? 0);
+        if (!empty($r['next_odo'])) {
+            $milesUntil = (int)$r['next_odo'] - (int)($r['current_odo'] ?? 0);
             if ($milesUntil <= 500) return 'urgent';
             if ($milesUntil <= 2000) return 'upcoming';
         }

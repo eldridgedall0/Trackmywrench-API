@@ -10,7 +10,7 @@ class DetailEndpoint extends BaseEndpoint
     public function handle(Request $request): void
     {
         $userId = $request->getAuthenticatedUserId();
-        $reminderId = (int) $request->getRouteParam('id');
+        $reminderId = $request->getRouteParam('id'); // String ID (varchar 64)
 
         $reminderModel = new Reminder();
         $reminder = $reminderModel->getById($reminderId, $userId);
