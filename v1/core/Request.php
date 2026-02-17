@@ -3,6 +3,12 @@
  * GarageMinder Mobile API - Request Wrapper
  * 
  * Encapsulates HTTP request data with convenience methods.
+ * 
+ * PATH RESOLUTION:
+ * Handles three URL styles:
+ *   1. Clean URL:      /gm/api/v1/vehicles          → /vehicles
+ *   2. index.php path: /gm/api/v1/index.php/vehicles → /vehicles
+ *   3. PATH_INFO:      PATH_INFO = /vehicles         → /vehicles
  */
 
 namespace GarageMinder\API\Core;
@@ -35,25 +41,34 @@ class Request
 
     private function parsePath(): string
     {
-        // Use PATH_INFO if available (handles index.php/path style)
+        // Strategy 1: Use PATH_INFO if available
+        // When URL is /gm/api/v1/index.php/vehicles, Apache sets PATH_INFO = /vehicles
+        // When .htaccess rewrites to index.php/$1, PATH_INFO = /vehicles
         if (!empty($_SERVER['PATH_INFO'])) {
             $path = $_SERVER['PATH_INFO'];
-        } else {
-            $path = parse_url($this->uri, PHP_URL_PATH) ?? '/';
-            
-            // Remove API prefix
+            // Clean it up
+            $path = '/' . trim($path, '/');
+            return $path === '/' ? '/' : $path;
+        }
+
+        // Strategy 2: Parse from REQUEST_URI by stripping API_PREFIX
+        // For clean URLs: /gm/api/v1/vehicles → strip /gm/api/v1 → /vehicles
+        $path = parse_url($this->uri, PHP_URL_PATH) ?? '/';
+
+        // Remove API prefix (e.g. /gm/api/v1)
+        if (defined('API_PREFIX') && API_PREFIX !== '' && API_PREFIX !== '/') {
             $prefix = API_PREFIX;
             if (strpos($path, $prefix) === 0) {
                 $path = substr($path, strlen($prefix));
             }
-            
-            // Remove index.php if present (fallback when .htaccess rewrite fails)
-            $path = preg_replace('#^/index\.php#', '', $path);
         }
-        
+
+        // Remove index.php if present at the start (e.g. /index.php/vehicles → /vehicles)
+        $path = preg_replace('#^/index\.php#', '', $path);
+
         // Ensure leading slash, remove trailing
         $path = '/' . trim($path, '/');
-        return $path;
+        return $path === '/' ? '/' : $path;
     }
 
     private function parseHeaders(): array

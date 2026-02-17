@@ -1,9 +1,9 @@
 # GarageMinder Mobile API v1
 # URL Rewriting - Routes all requests to index.php
+# Clean URLs: /gm/api/v1/vehicles (no index.php)
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # Auto-detect base - works under /api/v1/ or /gm/api/v1/ etc.
     RewriteBase /gm/api/v1/
 
     # Block access to sensitive directories
@@ -13,13 +13,21 @@
     RewriteRule ^endpoints/ - [F,L]
     RewriteRule ^models/ - [F,L]
 
-    # Allow admin-tester static files
+    # Allow admin-tester static files through
     RewriteRule ^admin-tester/(.+\.(html|css|js|png|ico))$ admin-tester/$1 [L]
 
-    # Route all API requests to index.php
+    # If the request is for an actual file or directory, serve it directly
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php [QSA,L]
+    # Route everything else to index.php
+    # The [QSA,L] passes query strings and stops further rules
+    RewriteRule ^(.*)$ index.php/$1 [QSA,L]
+</IfModule>
+
+# Fallback for hosts where mod_rewrite might not work
+# This tells Apache to use index.php as the handler for missing resources
+<IfModule !mod_rewrite.c>
+    FallbackResource /gm/api/v1/index.php
 </IfModule>
 
 # Security headers

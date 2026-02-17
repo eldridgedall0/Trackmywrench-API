@@ -4,7 +4,7 @@
 // Auto-detect API base from current page location
 // Works whether app is at /api/v1/ or /gm/api/v1/ etc.
 const TESTER_PATH = window.location.pathname.replace(/\/admin-tester\/?.*$/, '');
-const API_BASE = window.location.origin + TESTER_PATH + '/index.php';
+const API_BASE = window.location.origin + TESTER_PATH;
 let accessToken = localStorage.getItem('gm_admin_token');
 let refreshToken = localStorage.getItem('gm_admin_refresh');
 let currentUser = null;

@@ -168,6 +168,8 @@ define('RATE_LIMIT_LOGIN_WINDOW', 300);
 define('API_VERSION', '1.0.0');
 
 // Auto-detect base path
+// Works with both clean URLs (/gm/api/v1/vehicles) and index.php (/gm/api/v1/index.php/vehicles)
+// SCRIPT_NAME is always /gm/api/v1/index.php regardless of rewrite
 $_scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '/api/v1/index.php');
 define('API_PREFIX', rtrim($_scriptDir, '/'));
 
