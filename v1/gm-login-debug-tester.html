@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GarageMinder · WebView Login Debug Tester</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0c0e14;
+    --surface: #13161f;
+    --surface2: #1a1e2a;
+    --border: #252a38;
+    --accent: #f97316;
+    --accent2: #22d3ee;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--text); }
+
+  .badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: 1fr;
+    height: calc(100vh - 57px);
+    overflow: hidden;
+  }
+
+  /* LEFT PANEL */
+  .left-panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .input-group {
+    margin-bottom: 10px;
+  }
+
+  label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  input, textarea, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    transition: border-color 0.15s;
+    outline: none;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+  }
+
+  textarea { resize: vertical; min-height: 70px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    width: 100%;
+    justify-content: center;
+  }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--border);
+  }
+  .btn-danger:hover { border-color: var(--red); background: rgba(248,113,113,0.05); }
+
+  .action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* STATUS INDICATORS */
+  .status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .status-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .status-name {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .status-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    word-break: break-all;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-right: 5px;
+  }
+  .dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.red { background: var(--red); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); animation: pulse 1.5s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* RESULTS PANEL */
+  .result-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 10px;
+    max-height: 120px;
+    overflow-y: auto;
+    word-break: break-all;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
+
+  .result-box.success { border-color: var(--green); color: var(--green); }
+  .result-box.error { border-color: var(--red); color: var(--red); }
+
+  .left-scroll {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+  }
+
+  .log-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .log-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .log-controls { display: flex; gap: 8px; }
+
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+  }
+
+  .filter-tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.1s;
+  }
+  .filter-tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  .log-area {
+    padding: 16px 20px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .log-entry {
+    display: grid;
+    grid-template-columns: 70px 80px 1fr auto;
+    gap: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    align-items: start;
+    transition: background 0.1s;
+    cursor: default;
+  }
+
+  .log-entry:hover { background: var(--surface2); }
+
+  .log-time { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+
+  .log-type {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .log-type.info { background: rgba(34,211,238,0.1); color: var(--accent2); }
+  .log-type.success { background: rgba(74,222,128,0.1); color: var(--green); }
+  .log-type.error { background: rgba(248,113,113,0.1); color: var(--red); }
+  .log-type.warn { background: rgba(251,191,36,0.1); color: var(--yellow); }
+  .log-type.request { background: rgba(249,115,22,0.1); color: var(--accent); }
+  .log-type.response { background: rgba(167,139,250,0.1); color: #a78bfa; }
+
+  .log-msg { color: var(--text); word-break: break-word; line-height: 1.5; }
+  .log-msg .highlight { color: var(--accent); }
+  .log-msg .code { 
+    background: var(--surface); 
+    border: 1px solid var(--border);
+    border-radius: 3px; 
+    padding: 1px 5px; 
+    font-size: 11px;
+  }
+
+  .log-status {
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .log-status.ok { color: var(--green); }
+  .log-status.fail { color: var(--red); }
+
+  .log-detail {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+  }
+  .log-entry.expanded .log-detail { display: block; }
+
+  .empty-log {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--muted);
+    gap: 8px;
+  }
+  .empty-log svg { opacity: 0.3; }
+
+  /* COOKIE DISPLAY */
+  .cookie-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .cookie-key { color: var(--accent2); margin-bottom: 2px; font-weight: 700; }
+  .cookie-val { color: var(--muted); word-break: break-all; }
+  .cookie-wp { border-color: var(--green) !important; }
+
+  /* STEP INDICATOR */
+  .steps {
+    display: flex;
+    gap: 0;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--surface);
+    transition: all 0.3s;
+    flex-shrink: 0;
+  }
+  .step.active .step-dot { border-color: var(--accent); color: var(--accent); background: rgba(249,115,22,0.1); }
+  .step.done .step-dot { border-color: var(--green); background: var(--green); color: #000; }
+  .step.error .step-dot { border-color: var(--red); background: rgba(248,113,113,0.1); color: var(--red); }
+
+  .step-line {
+    height: 2px;
+    width: 32px;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .step.done + .step .step-line { background: var(--green); }
+
+  .step-label {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-align: center;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    max-width: 60px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .step-wrap { display: flex; flex-direction: column; align-items: center; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    margin-right: 4px;
+  }
+  .tag-bug { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .tag-fix { background: rgba(74,222,128,0.15); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
+
+  .issue-list { list-style: none; }
+  .issue-list li {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .issue-list li:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Garage<span>Minder</span></div>
+  <div class="badge">WebView Login · Debug Tester</div>
+  <div style="margin-left:auto; display:flex; gap:8px;">
+    <span id="overall-status" class="badge" style="color:var(--yellow)"><span class="dot yellow"></span>IDLE</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- LEFT PANEL: Controls -->
+  <div class="left-panel">
+    <div class="left-scroll">
+
+      <!-- CONFIG -->
+      <div class="panel-section">
+        <div class="section-label">API Config</div>
+        <div class="input-group">
+          <label>BASE URL</label>
+          <input type="text" id="base-url" value="https://yesca.st/gm/api/v1" />
+        </div>
+        <div class="input-group">
+          <label>LOGIN URL (WebView loads this)</label>
+          <input type="text" id="login-url" value="https://yesca.st/gm/login/?mobile=1" />
+        </div>
+        <div class="input-group">
+          <label>SUCCESS REDIRECT CONTAINS</label>
+          <input type="text" id="success-pattern" value="login_success=1" />
+        </div>
+      </div>
+
+      <!-- TEST 1: DIRECT API HEALTH -->
+      <div class="panel-section">
+        <div class="section-label">Step 1 · API Health</div>
+        <button class="btn btn-primary" onclick="testApiHealth()">▶ Check API Reachable</button>
+        <div id="health-result" class="result-box" style="margin-top:10px;display:none;"></div>
+      </div>
+
+      <!-- TEST 2: TOKEN EXCHANGE ENDPOINT -->
+      <div class="panel-section">
+        <div class="section-label">Step 2 · Token Exchange Endpoint</div>
+        <p style="font-size:11px; color:var(--muted); margin-bottom:10px; font-family:var(--mono);">
+          Tests <span style="color:var(--accent)">POST /auth/token-exchange</span> (the correct path).
+          App was calling <span style="color:var(--red)">/auth/exchange-token</span> — wrong!
+        </p>
+        <div class="input-group">
+          <label>WP COOKIE (paste from browser after login)</label>
+          <textarea id="wp-cookie" placeholder="wordpress_logged_in_XXXXX=username%7C..."></textarea>
+        </div>
+        <div class="input-group">
+          <label>DEVICE ID</label>
+          <input type="text" id="device-id" value="browser_debug_001" />
+        </div>
+        <div class="action-row">
+          <button class="btn btn-primary" onclick="testTokenExchange()" style="flex:1">▶ Test Exchange</button>
+          <button class="btn btn-secondary btn-sm" onclick="grabCookieFromBrowser()">🍪 Grab Cookie</button>
+        </div>
+        <div id="exchange-result" class="result-box" style="margin-top:10px;display:none;"></div>
+      </div>
+
+      <!-- TEST 3: FULL WEBVIEW FLOW SIM -->
+      <div class="panel-section">
+        <div class="section-label">Step 3 · Simulate WebView Login</div>
+        <div class="input-group">
+          <label>USERNAME</label>
+          <input type="text" id="sim-username" placeholder="your@email.com" />
+        </div>
+        <div class="input-group">
+          <label>PASSWORD</label>
+          <input type="password" id="sim-password" placeholder="••••••••" />
+        </div>
+        <button class="btn btn-primary" onclick="simulateDirectLogin()">▶ Direct Login (POST /auth/login)</button>
+        <div id="direct-login-result" class="result-box" style="margin-top:10px;display:none;"></div>
+      </div>
+
+      <!-- TEST 4: VERIFY TOKEN -->
+      <div class="panel-section">
+        <div class="section-label">Step 4 · Verify Stored Token</div>
+        <div class="input-group">
+          <label>ACCESS TOKEN (from exchange or direct login)</label>
+          <textarea id="access-token" placeholder="eyJhbGci..." style="min-height:55px;"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="verifyToken()">▶ Verify Token (GET /auth/verify)</button>
+        <div id="verify-result" class="result-box" style="margin-top:10px;display:none;"></div>
+      </div>
+
+      <!-- KNOWN ISSUES -->
+      <div class="panel-section">
+        <div class="section-label">Known Issues Found</div>
+        <ul class="issue-list">
+          <li>
+            <span class="tag tag-bug">BUG</span>
+            App calls <code style="color:var(--red);font-size:11px">/auth/exchange-token</code>. API expects <code style="color:var(--green);font-size:11px">/auth/token-exchange</code>
+          </li>
+          <li>
+            <span class="tag tag-bug">BUG</span>
+            <code>document.cookie</code> in WebView won't capture HttpOnly WP cookies. Need CookieManager native API.
+          </li>
+          <li>
+            <span class="tag tag-bug">BUG</span>
+            Login URL uses <code style="font-size:11px">?mobile=1</code> but WordPress plugin expects <code style="font-size:11px">?mobile_app=1</code> (check API docs)
+          </li>
+          <li>
+            <span class="tag tag-fix">FIX</span>
+            Change <code style="font-size:11px">exchangeToken()</code> endpoint to <code style="color:var(--green);font-size:11px">/auth/token-exchange</code>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Live Log -->
+  <div class="right-panel">
+
+    <!-- Flow Steps -->
+    <div class="steps" id="flow-steps">
+      <div class="step-wrap">
+        <div class="step" id="step-1">
+          <div class="step-dot">1</div>
+        </div>
+        <div class="step-label">API Up</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-wrap">
+        <div class="step" id="step-2">
+          <div class="step-dot">2</div>
+        </div>
+        <div class="step-label">WP Login</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-wrap">
+        <div class="step" id="step-3">
+          <div class="step-dot">3</div>
+        </div>
+        <div class="step-label">Cookie</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-wrap">
+        <div class="step" id="step-4">
+          <div class="step-dot">4</div>
+        </div>
+        <div class="step-label">Exchange</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-wrap">
+        <div class="step" id="step-5">
+          <div class="step-dot">5</div>
+        </div>
+        <div class="step-label">JWT ✓</div>
+      </div>
+    </div>
+
+    <div class="log-header">
+      <div class="log-title">📡 Request / Response Log</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="filter-tabs">
+          <button class="filter-tab active" onclick="setFilter('all', this)">ALL</button>
+          <button class="filter-tab" onclick="setFilter('request', this)">REQ</button>
+          <button class="filter-tab" onclick="setFilter('response', this)">RES</button>
+          <button class="filter-tab" onclick="setFilter('error', this)">ERR</button>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="clearLog()">Clear</button>
+      </div>
+    </div>
+
+    <div class="log-area" id="log-area">
+      <div class="empty-log" id="empty-log">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 9h8M8 13h6M6 3h12a2 2 0 012 2v16l-4-4H6a2 2 0 01-2-2V5a2 2 0 012-2z"/>
+        </svg>
+        <div style="font-size:12px;">Run a test to see logs</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let logs = [];
+  let currentFilter = 'all';
+
+  function ts() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function addLog(type, msg, detail = '', statusCode = null) {
+    const entry = { type, msg, detail, statusCode, time: ts(), id: Date.now() + Math.random() };
+    logs.push(entry);
+    renderLogs();
+  }
+
+  function renderLogs() {
+    const area = document.getElementById('log-area');
+    const empty = document.getElementById('empty-log');
+    const filtered = currentFilter === 'all' ? logs : logs.filter(l => l.type === currentFilter);
+    
+    if (filtered.length === 0) {
+      empty.style.display = 'flex';
+      area.querySelectorAll('.log-entry').forEach(e => e.remove());
+      return;
+    }
+    empty.style.display = 'none';
+
+    area.querySelectorAll('.log-entry').forEach(e => e.remove());
+    filtered.forEach(log => {
+      const el = document.createElement('div');
+      el.className = 'log-entry';
+      el.dataset.id = log.id;
+      
+      const statusHtml = log.statusCode 
+        ? `<span class="log-status ${log.statusCode < 300 ? 'ok' : 'fail'}">${log.statusCode}</span>`
+        : '<span></span>';
+
+      el.innerHTML = `
+        <span class="log-time">${log.time}</span>
+        <span class="log-type ${log.type}">${log.type}</span>
+        <span class="log-msg">${log.msg}</span>
+        ${statusHtml}
+        ${log.detail ? `<div class="log-detail">${log.detail}</div>` : ''}
+      `;
+
+      if (log.detail) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => el.classList.toggle('expanded'));
+      }
+
+      area.appendChild(el);
+    });
+
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    renderLogs();
+  }
+
+  function clearLog() {
+    logs = [];
+    renderLogs();
+  }
+
+  function setStep(num, state) {
+    const step = document.getElementById(`step-${num}`);
+    if (!step) return;
+    step.className = `step ${state}`;
+    if (state === 'done') step.querySelector('.step-dot').textContent = '✓';
+    else if (state === 'error') step.querySelector('.step-dot').textContent = '✗';
+    else step.querySelector('.step-dot').textContent = num;
+  }
+
+  function setOverall(state, text) {
+    const el = document.getElementById('overall-status');
+    const colors = { ok: 'var(--green)', fail: 'var(--red)', loading: 'var(--yellow)' };
+    el.innerHTML = `<span class="dot ${state === 'ok' ? 'green' : state === 'fail' ? 'red' : 'yellow'}"></span>${text}`;
+  }
+
+  function showResult(id, content, isError = false) {
+    const el = document.getElementById(id);
+    el.style.display = 'block';
+    el.className = `result-box ${isError ? 'error' : 'success'}`;
+    el.textContent = content;
+  }
+
+  async function doFetch(endpoint, options = {}, label = '') {
+    const base = document.getElementById('base-url').value.trim();
+    const url = endpoint.startsWith('http') ? endpoint : `${base}${endpoint}`;
+    
+    addLog('request', `<span class="highlight">${options.method || 'GET'}</span> <span class="code">${endpoint}</span>${label ? ' · '+label : ''}`, 
+      `URL: ${url}\nHeaders: ${JSON.stringify(options.headers || {}, null, 2)}\nBody: ${options.body || '(none)'}`);
+
+    try {
+      const resp = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await resp.text();
+      let parsed;
+      try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+
+      const isOk = resp.ok && (parsed.success !== false);
+      addLog(isOk ? 'response' : 'error', 
+        isOk 
+          ? `Response OK from <span class="code">${endpoint}</span>`
+          : `Error from <span class="code">${endpoint}</span>: ${parsed?.error?.message || parsed?.error?.code || resp.statusText}`,
+        JSON.stringify(parsed, null, 2),
+        resp.status
+      );
+
+      return { ok: isOk, status: resp.status, data: parsed };
+    } catch (err) {
+      addLog('error', `Network error: ${err.message} — check CORS or URL`, `Error: ${err.toString()}`);
+      return { ok: false, error: err.message };
+    }
+  }
+
+  async function testApiHealth() {
+    setOverall('loading', 'TESTING...');
+    setStep(1, 'active');
+    addLog('info', 'Testing API reachability...');
+    const result = await doFetch('/auth/verify', { method: 'GET' }, 'health probe');
+    // 401 is fine - it means API is up
+    if (result.status === 401 || result.status === 200) {
+      setStep(1, 'done');
+      setOverall('ok', 'API REACHABLE');
+      showResult('health-result', `✓ API is reachable (HTTP ${result.status}). Endpoint exists.`);
+      addLog('success', 'API is up and responding');
+    } else if (result.status === 404) {
+      setStep(1, 'error');
+      setOverall('fail', 'ENDPOINT 404');
+      showResult('health-result', `✗ 404 - Base URL may be wrong: ${document.getElementById('base-url').value}`, true);
+    } else if (!result.status) {
+      setStep(1, 'error');
+      setOverall('fail', 'UNREACHABLE');
+      showResult('health-result', `✗ Cannot reach API. CORS or network issue. Open in browser to check.`, true);
+    } else {
+      setStep(1, 'done');
+      showResult('health-result', `API responded with HTTP ${result.status}`);
+    }
+  }
+
+  async function testTokenExchange() {
+    const cookie = document.getElementById('wp-cookie').value.trim();
+    const deviceId = document.getElementById('device-id').value.trim();
+
+    if (!cookie) {
+      showResult('exchange-result', '✗ Paste a WordPress cookie first. Log in at the LOGIN URL, then use Dev Tools → Application → Cookies to copy wordpress_logged_in_* value.', true);
+      addLog('warn', 'No cookie provided for token exchange test');
+      return;
+    }
+
+    setStep(3, 'done');
+    setStep(4, 'active');
+    addLog('info', `Testing <span class="highlight">POST /auth/token-exchange</span> (CORRECT endpoint name)`);
+    
+    // Also test the WRONG endpoint to show the difference
+    addLog('warn', 'FYI: App was calling <span class="highlight">/auth/exchange-token</span> which causes 404');
+
+    const result = await doFetch('/auth/token-exchange', {
+      method: 'POST',
+      headers: { 'Cookie': cookie },
+      body: JSON.stringify({ device_id: deviceId, device_name: 'Browser Debug Tool', platform: 'web' })
+    }, 'token exchange');
+
+    if (result.ok && result.data?.data?.access_token) {
+      setStep(4, 'done');
+      setStep(5, 'done');
+      setOverall('ok', 'EXCHANGE OK');
+      const token = result.data.data.access_token;
+      document.getElementById('access-token').value = token;
+      showResult('exchange-result', `✓ Token exchange SUCCESS!\nAccess token: ${token.substring(0,40)}...\nUser: ${result.data.data.user?.email}`);
+      addLog('success', `Token exchanged! User: <span class="highlight">${result.data.data.user?.email}</span>`);
+    } else if (result.status === 401) {
+      setStep(4, 'error');
+      showResult('exchange-result', `✗ 401 - No valid WP session. The cookie may be expired or not a wordpress_logged_in_* cookie.\n\nError: ${result.data?.error?.message || 'NO_WP_SESSION'}`, true);
+      addLog('error', 'Token exchange 401: cookie invalid or no WP session');
+    } else if (result.status === 404) {
+      setStep(4, 'error');
+      showResult('exchange-result', `✗ 404 - Endpoint not found. Verify /auth/token-exchange exists in API.`, true);
+      addLog('error', '404 on token exchange — endpoint path mismatch');
+    } else {
+      setStep(4, 'error');
+      showResult('exchange-result', `✗ Failed: HTTP ${result.status}\n${JSON.stringify(result.data?.error, null, 2)}`, true);
+    }
+  }
+
+  async function simulateDirectLogin() {
+    const username = document.getElementById('sim-username').value.trim();
+    const password = document.getElementById('sim-password').value.trim();
+
+    if (!username || !password) {
+      showResult('direct-login-result', '✗ Enter username and password', true);
+      return;
+    }
+
+    setStep(2, 'active');
+    addLog('info', `Testing direct login as <span class="highlight">${username}</span>`);
+
+    const result = await doFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, device_id: 'browser_debug', device_name: 'Browser Debug', platform: 'web' })
+    }, 'direct login');
+
+    if (result.ok && result.data?.data?.access_token) {
+      setStep(2, 'done');
+      setStep(3, 'done');
+      setStep(4, 'done');
+      setStep(5, 'done');
+      setOverall('ok', 'LOGIN SUCCESS');
+      const token = result.data.data.access_token;
+      document.getElementById('access-token').value = token;
+      showResult('direct-login-result', `✓ Login SUCCESS!\nUser: ${result.data.data.user?.email}\nSubscription: ${result.data.data.user?.subscription_level}\nToken: ${token.substring(0,40)}...`);
+      addLog('success', `Logged in! User: <span class="highlight">${result.data.data.user?.email}</span> (${result.data.data.user?.subscription_level})`);
+    } else if (result.status === 401) {
+      setStep(2, 'error');
+      setOverall('fail', 'BAD CREDS');
+      showResult('direct-login-result', `✗ Invalid credentials`, true);
+    } else if (result.status === 404) {
+      setStep(2, 'error');
+      showResult('direct-login-result', `✗ 404 - /auth/login endpoint not found. Check BASE_URL.`, true);
+    } else {
+      setStep(2, 'error');
+      showResult('direct-login-result', `✗ HTTP ${result.status}: ${result.data?.error?.message || 'Login failed'}`, true);
+    }
+  }
+
+  async function verifyToken() {
+    const token = document.getElementById('access-token').value.trim();
+    if (!token) {
+      showResult('verify-result', '✗ No token. Run login or exchange first.', true);
+      return;
+    }
+
+    addLog('info', 'Verifying token against <span class="code">GET /auth/verify</span>');
+    const result = await doFetch('/auth/verify', {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    }, 'token verify');
+
+    if (result.ok && result.data?.data?.valid) {
+      showResult('verify-result', `✓ Token VALID!\nUser: ${result.data.data.user?.email}\nActive sessions: ${result.data.data.active_sessions}`);
+      addLog('success', 'Token verified ✓');
+    } else if (result.status === 401) {
+      showResult('verify-result', `✗ Token invalid or expired (401)`, true);
+      addLog('error', 'Token verify failed: 401');
+    } else {
+      showResult('verify-result', `✗ HTTP ${result.status}: ${result.data?.error?.message || 'Verify failed'}`, true);
+    }
+  }
+
+  async function grabCookieFromBrowser() {
+    // Try to read cookies from current document (won't work for cross-origin HttpOnly cookies)
+    const cookies = document.cookie;
+    const wpCookies = cookies.split(';').filter(c => c.includes('wordpress_logged_in'));
+    
+    if (wpCookies.length > 0) {
+      document.getElementById('wp-cookie').value = wpCookies.map(c => c.trim()).join('; ');
+      addLog('info', `Found ${wpCookies.length} WP cookie(s) from current page`);
+    } else {
+      document.getElementById('wp-cookie').value = '';
+      addLog('warn', 'No wordpress_logged_in_* cookies found in current domain. Log in to trackmywrench.com first, then copy manually from Dev Tools → Application → Cookies → yesca.st');
+      alert('No WP cookies found on this page.\n\nTo get the cookie:\n1. Open https://yesca.st/gm/login/?mobile=1 in a new tab\n2. Log in normally\n3. Open DevTools → Application → Cookies → https://yesca.st\n4. Copy the full "wordpress_logged_in_*" cookie value\n5. Paste it in the cookie field above');
+    }
+  }
+
+  // Auto-log page load
+  addLog('info', 'Debug tester loaded. API base: <span class="code">https://yesca.st/gm/api/v1</span>');
+  addLog('warn', '<span style="color:var(--red)">KNOWN BUG:</span> App calls <span class="code">/auth/exchange-token</span> but API has <span class="code">/auth/token-exchange</span>');
+</script>
+</body>
+</html>
