@@ -79,8 +79,11 @@ class TokenExchangeEndpoint extends BaseEndpoint
     }
 
     /**
-     * Validate WordPress logged_in cookie and extract user ID
-     * Uses WordPress database for wp_users and wp_usermeta
+     * Validate WordPress logged_in cookie and extract user ID.
+     *
+     * FIX: Was using hardcoded 'wp_users' and 'wp_usermeta' table names,
+     * ignoring the custom $table_prefix defined in wp-config.php.
+     * Now uses Database::wpTable() which reads WP_TABLE_PREFIX correctly.
      */
     private function validateWordPressCookie(string $cookieString): ?int
     {
@@ -96,10 +99,13 @@ class TokenExchangeEndpoint extends BaseEndpoint
 
         if ((int) $expiration < time()) return null;
 
-        // Use WordPress database for wp_users lookup
-        $wpDb = Database::getWordPress();
+        // Use WordPress database with correct custom table prefix
+        $wpDb  = Database::getWordPress();
+        $tUsers    = Database::wpTable('users');    // e.g. abc123_users  (NOT hardcoded wp_users)
+        $tUsermeta = Database::wpTable('usermeta'); // e.g. abc123_usermeta
+
         $user = $wpDb->fetchOne(
-            "SELECT ID, user_login, user_pass FROM wp_users WHERE user_login = ?",
+            "SELECT ID, user_login, user_pass FROM `{$tUsers}` WHERE user_login = ?",
             [$username]
         );
 
@@ -107,7 +113,7 @@ class TokenExchangeEndpoint extends BaseEndpoint
 
         // Verify against WordPress session tokens in usermeta
         $sessionTokens = $wpDb->fetchOne(
-            "SELECT meta_value FROM wp_usermeta WHERE user_id = ? AND meta_key = 'session_tokens'",
+            "SELECT meta_value FROM `{$tUsermeta}` WHERE user_id = ? AND meta_key = 'session_tokens'",
             [$user['ID']]
         );
 
